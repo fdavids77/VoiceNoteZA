@@ -16,6 +16,10 @@ jobs:
     name: Build & Release APK
     runs-on: ubuntu-latest
 
+    # Expose whether a keystore secret exists as an env var usable in step conditions
+    env:
+      HAS_KEYSTORE: ${{ secrets.KEYSTORE_BASE64 != '' }}
+
     steps:
       # ── 1. Checkout ────────────────────────────────────────────────────────
       - name: Checkout repository
@@ -59,7 +63,7 @@ jobs:
       #    KEY_PASSWORD       → key password
       #
       - name: Sign release APK
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        if: env.HAS_KEYSTORE == 'true'
         uses: r0adkll/sign-android-release@v1
         id: sign_app
         with:
@@ -73,7 +77,7 @@ jobs:
 
       # ── 8. Upload signed release APK as artifact ────────────────────────────
       - name: Upload signed release APK
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        if: env.HAS_KEYSTORE == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: VoiceNoteZA-release-signed
@@ -82,7 +86,7 @@ jobs:
 
       # ── 9. Attach APK to GitHub Release (when you create a tag release) ─────
       - name: Attach APK to GitHub Release
-        if: github.event_name == 'release' && secrets.KEYSTORE_BASE64 != ''
+        if: github.event_name == 'release' && env.HAS_KEYSTORE == 'true'
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ steps.sign_app.outputs.signedReleaseFile }}
@@ -91,7 +95,7 @@ jobs:
 
       # ── 10. Fallback: attach unsigned APK to release if no keystore ──────────
       - name: Attach unsigned APK to Release (no keystore)
-        if: github.event_name == 'release' && secrets.KEYSTORE_BASE64 == ''
+        if: github.event_name == 'release' && env.HAS_KEYSTORE != 'true'
         uses: softprops/action-gh-release@v2
         with:
           files: app/build/outputs/apk/release/app-release-unsigned.apk

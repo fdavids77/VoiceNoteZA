@@ -140,20 +140,24 @@ public class GoogleTtsClient {
         float speakingRate = prefs.getSpeakingRate();
         float pitch = prefs.getPitch();
 
+        // Derive languageCode from voice name (e.g. "en-GB-Neural2-F" → "en-GB")
+        String langCode = "en-ZA"; // fallback
+        if (voiceName.length() >= 5) {
+            langCode = voiceName.substring(0, 5); // "en-ZA" or "en-GB" etc.
+        }
+
         // Build JSON request body
         JsonObject input = new JsonObject();
         input.addProperty("text", text);
 
         JsonObject voice = new JsonObject();
-        voice.addProperty("languageCode", "en-ZA");
+        voice.addProperty("languageCode", langCode);
         voice.addProperty("name", voiceName);
 
         JsonObject audioConfig = new JsonObject();
-        // OGG_OPUS = WhatsApp's native voice note format
         audioConfig.addProperty("audioEncoding", "OGG_OPUS");
         audioConfig.addProperty("speakingRate", speakingRate);
         audioConfig.addProperty("pitch", pitch);
-        // 16000 Hz sample rate — optimal for voice notes
         audioConfig.addProperty("sampleRateHertz", 16000);
 
         JsonObject requestBody = new JsonObject();
@@ -172,22 +176,20 @@ public class GoogleTtsClient {
             .build();
 
         try (Response response = httpClient.newCall(request).execute()) {
+            // Read body ONCE — OkHttp does not allow reading twice
             String body = response.body() != null ? response.body().string() : "empty response";
+
             if (!response.isSuccessful()) {
-                // Only throw ApiKeyException for true auth failures
                 if (response.code() == 403) {
-                    throw new ApiKeyException("HTTP 403 — key may lack TTS API permission. Body: " + body);
+                    throw new ApiKeyException("HTTP 403 — key may lack TTS permission: " + body);
                 }
-                // For everything else, throw a plain IOException with the full body
-                // so the real cause is shown to the user
                 throw new IOException("HTTP " + response.code() + ": " + body);
             }
 
-            String responseBody = response.body().string();
-            JsonObject json = gson.fromJson(responseBody, JsonObject.class);
+            // Parse the single body string we already read
+            JsonObject json = gson.fromJson(body, JsonObject.class);
             String audioContent = json.get("audioContent").getAsString();
 
-            // Decode base64 audio and save to cache
             byte[] audioBytes = Base64.getDecoder().decode(audioContent);
             File outputFile = getOutputFile();
             try (FileOutputStream fos = new FileOutputStream(outputFile)) {

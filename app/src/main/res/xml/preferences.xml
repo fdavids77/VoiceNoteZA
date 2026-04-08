@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <!-- API Key -->
+    <PreferenceCategory
+        app:title="Google Cloud"
+        app:iconSpaceReserved="false">
+
+        <EditTextPreference
+            app:key="api_key"
+            app:title="API Key"
+            app:dialogTitle="Enter Google Cloud API Key"
+            app:dialogMessage="Get your free key at:\nconsole.cloud.google.com → APIs &amp; Services → Credentials"
+            app:inputType="textVisiblePassword"
+            app:useSimpleSummaryProvider="false"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <!-- Voice settings -->
+    <PreferenceCategory
+        app:title="Voice"
+        app:iconSpaceReserved="false">
+
+        <ListPreference
+            app:key="voice_name"
+            app:title="Voice Quality"
+            app:summary="South African English Female"
+            app:entries="@array/voice_labels"
+            app:entryValues="@array/voice_values"
+            app:defaultValue="en-ZA-Neural2-A"
+            app:iconSpaceReserved="false" />
+
+        <ListPreference
+            app:key="speaking_rate"
+            app:title="Speaking Speed"
+            app:entries="@array/speed_labels"
+            app:entryValues="@array/speed_values"
+            app:defaultValue="1.0"
+            app:useSimpleSummaryProvider="true"
+            app:iconSpaceReserved="false" />
+
+        <ListPreference
+            app:key="pitch"
+            app:title="Pitch"
+            app:entries="@array/pitch_labels"
+            app:entryValues="@array/pitch_values"
+            app:defaultValue="0.0"
+            app:useSimpleSummaryProvider="true"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <!-- About -->
+    <PreferenceCategory
+        app:title="About"
+        app:iconSpaceReserved="false">
+
+        <Preference
+            app:key="about_voice"
+            app:title="Voice: en-ZA-Neural2-A"
+            app:summary="South African English Female — Neural2 (highest quality)"
+            app:iconSpaceReserved="false"
+            app:selectable="false" />
+
+        <Preference
+            app:key="about_free"
+            app:title="Free Tier"
+            app:summary="1 million characters/month free — approx. 10,000 WhatsApp messages"
+            app:iconSpaceReserved="false"
+            app:selectable="false" />
+
+        <Preference
+            app:key="about_version"
+            app:title="VoiceNoteZA v1.0.0"
+            app:summary="github.com/fdavids77/VoiceNoteZA"
+            app:iconSpaceReserved="false"
+            app:selectable="false" />
+
+    </PreferenceCategory>
+
+</PreferenceScreen>

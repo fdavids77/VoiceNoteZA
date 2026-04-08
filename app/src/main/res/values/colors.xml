@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary brand — WhatsApp green -->
+    <color name="primary">#075E54</color>
+    <color name="primary_dark">#054D44</color>
+    <color name="primary_light">#128C7E</color>
+    <color name="whatsapp_green">#25D366</color>
+
+    <!-- Surfaces -->
+    <color name="background">#F0F2F5</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="surface_green">#E8F5E9</color>
+
+    <!-- Text -->
+    <color name="text_primary">#111B21</color>
+    <color name="text_secondary">#667781</color>
+    <color name="text_hint">#9E9E9E</color>
+
+    <!-- Utility -->
+    <color name="white">#FFFFFF</color>
+    <color name="white_70">#B3FFFFFF</color>
+    <color name="warning_red">#D32F2F</color>
+</resources>

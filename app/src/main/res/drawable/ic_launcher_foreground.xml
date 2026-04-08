@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Background circle - WhatsApp green -->
+    <path
+        android:fillColor="#25D366"
+        android:pathData="M54,54m-54,0a54,54 0,1 1,108 0a54,54 0,1 1,-108 0" />
+
+    <!-- Microphone body -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,28 C49,28 45,32 45,37 L45,54 C45,59 49,63 54,63 C59,63 63,59 63,54 L63,37 C63,32 59,28 54,28 Z" />
+
+    <!-- Microphone stand arc -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M38,52 C38,61.9 45.2,70 54,70 C62.8,70 70,61.9 70,52 L66,52 C66,59.7 60.6,66 54,66 C47.4,66 42,59.7 42,52 Z" />
+
+    <!-- Microphone stand line -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M52,70 L56,70 L56,78 L52,78 Z" />
+
+    <!-- Microphone base -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M44,78 L64,78 L64,80 L44,80 Z" />
+
+    <!-- ZA text indicator -->
+    <path
+        android:fillColor="#075E54"
+        android:pathData="M47,36 L53,36 L47,44 L53,44 M56,36 L62,36 L56,44 L62,44"
+        android:strokeColor="#075E54"
+        android:strokeWidth="1" />
+
+</vector>

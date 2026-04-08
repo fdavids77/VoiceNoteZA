@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Voice quality options (SA English Female) -->
+    <string-array name="voice_labels">
+        <item>Neural2 — Best quality (recommended)</item>
+        <item>WaveNet — Very good quality</item>
+        <item>Standard — Basic quality (always free)</item>
+    </string-array>
+    <string-array name="voice_values">
+        <item>en-ZA-Neural2-A</item>
+        <item>en-ZA-Wavenet-A</item>
+        <item>en-ZA-Standard-A</item>
+    </string-array>
+
+    <!-- Speaking rate -->
+    <string-array name="speed_labels">
+        <item>Very slow (0.5×)</item>
+        <item>Slow (0.75×)</item>
+        <item>Normal (1.0×)</item>
+        <item>Slightly faster (1.15×)</item>
+        <item>Fast (1.3×)</item>
+    </string-array>
+    <string-array name="speed_values">
+        <item>0.5</item>
+        <item>0.75</item>
+        <item>1.0</item>
+        <item>1.15</item>
+        <item>1.3</item>
+    </string-array>
+
+    <!-- Pitch -->
+    <string-array name="pitch_labels">
+        <item>Lower (-4 semitones)</item>
+        <item>Slightly lower (-2 semitones)</item>
+        <item>Normal (0)</item>
+        <item>Slightly higher (+2 semitones)</item>
+        <item>Higher (+4 semitones)</item>
+    </string-array>
+    <string-array name="pitch_values">
+        <item>-4.0</item>
+        <item>-2.0</item>
+        <item>0.0</item>
+        <item>2.0</item>
+        <item>4.0</item>
+    </string-array>
+
+</resources>

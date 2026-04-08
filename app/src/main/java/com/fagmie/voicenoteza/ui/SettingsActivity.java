@@ -4,6 +4,7 @@ import android.os.Bundle;
 import android.view.MenuItem;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.preference.EditTextPreference;
 import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceFragmentCompat;
@@ -49,6 +50,17 @@ public class SettingsActivity extends AppCompatActivity {
         @Override
         public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
             setPreferencesFromResource(R.xml.preferences, rootKey);
+
+            // Set inputType on the API key field so text is visible while typing
+            EditTextPreference apiKeyEditPref = findPreference("api_key");
+            if (apiKeyEditPref != null) {
+                apiKeyEditPref.setOnBindEditTextListener(editText ->
+                    editText.setInputType(
+                        android.text.InputType.TYPE_CLASS_TEXT |
+                        android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+                    )
+                );
+            }
 
             // Show current voice selection as summary
             ListPreference voicePref = findPreference("voice_name");

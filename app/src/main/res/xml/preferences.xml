@@ -12,7 +12,6 @@
             app:title="API Key"
             app:dialogTitle="Enter Google Cloud API Key"
             app:dialogMessage="Get your free key at:\nconsole.cloud.google.com → APIs &amp; Services → Credentials"
-            app:inputType="textVisiblePassword"
             app:useSimpleSummaryProvider="false"
             app:iconSpaceReserved="false" />
 

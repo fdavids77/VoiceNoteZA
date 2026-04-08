@@ -9,7 +9,9 @@ import com.google.gson.JsonObject;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.MediaType;
@@ -69,6 +71,70 @@ public class GoogleTtsClient {
      * @throws ApiKeyException      if the API key is rejected (HTTP 400/403)
      * @throws IOException          on network errors
      */
+    /**
+     * Fetches all available voices from the API.
+     * Returns a list of VoiceInfo objects sorted: en-ZA first, then en-GB, then others.
+     */
+    public List<VoiceInfo> fetchAvailableVoices(String apiKey) throws IOException {
+        String url = "https://texttospeech.googleapis.com/v1/voices?key=" + apiKey;
+
+        Request request = new Request.Builder().url(url).get().build();
+
+        try (Response response = httpClient.newCall(request).execute()) {
+            String body = response.body() != null ? response.body().string() : "empty";
+            if (!response.isSuccessful()) {
+                throw new IOException("HTTP " + response.code() + ": " + body);
+            }
+
+            JsonObject json = gson.fromJson(body, JsonObject.class);
+            List<VoiceInfo> voices = new ArrayList<>();
+
+            for (com.google.gson.JsonElement el : json.getAsJsonArray("voices")) {
+                JsonObject v = el.getAsJsonObject();
+                String name = v.get("name").getAsString();
+                String gender = v.get("ssmlGender").getAsString();
+                String langCode = v.getAsJsonArray("languageCodes").get(0).getAsString();
+
+                // Only include English voices
+                if (!langCode.startsWith("en-")) continue;
+
+                // Only include female voices
+                if (!gender.equals("FEMALE")) continue;
+
+                voices.add(new VoiceInfo(name, langCode, gender));
+            }
+
+            // Sort: en-ZA first, en-GB second, rest alphabetically
+            voices.sort((a, b) -> {
+                int pa = a.langCode.equals("en-ZA") ? 0 : a.langCode.equals("en-GB") ? 1 : 2;
+                int pb = b.langCode.equals("en-ZA") ? 0 : b.langCode.equals("en-GB") ? 1 : 2;
+                if (pa != pb) return pa - pb;
+                return a.name.compareTo(b.name);
+            });
+
+            return voices;
+        }
+    }
+
+    public static class VoiceInfo {
+        public final String name;
+        public final String langCode;
+        public final String gender;
+
+        public VoiceInfo(String name, String langCode, String gender) {
+            this.name = name;
+            this.langCode = langCode;
+            this.gender = gender;
+        }
+
+        /** Display label shown in the picker dialog */
+        public String label() {
+            // e.g. "en-ZA-Standard-A" → "Standard-A  (en-ZA)"
+            String shortName = name.replace(langCode + "-", "");
+            return shortName + "  (" + langCode + ")";
+        }
+    }
+
     public File synthesize(String text, String apiKey) throws IOException {
         String voiceName = prefs.getVoiceName();
         float speakingRate = prefs.getSpeakingRate();

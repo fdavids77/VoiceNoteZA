@@ -206,14 +206,25 @@
 
             <!-- Info footer -->
             <TextView
+                android:id="@+id/tv_voice_info"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Voice: South African English Female (Neural2)\nFree tier: 1 million characters/month"
+                android:text="No voice selected — tap Pick Voice"
                 android:textColor="@color/text_secondary"
                 android:textSize="11sp"
                 android:gravity="center"
                 android:lineSpacingMultiplier="1.5"
-                android:layout_marginBottom="16dp" />
+                android:layout_marginBottom="4dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_pick_voice"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="🎙 Pick Voice from Available List"
+                app:strokeColor="@color/primary"
+                app:cornerRadius="24dp"
+                android:layout_marginBottom="24dp" />
 
         </LinearLayout>
     </ScrollView>

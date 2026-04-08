@@ -24,6 +24,8 @@ import com.fagmie.voicenoteza.databinding.ActivityMainBinding;
 import com.fagmie.voicenoteza.tts.GoogleTtsClient;
 import com.fagmie.voicenoteza.util.PrefsHelper;
 
+import java.util.List;
+
 import java.io.File;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -92,6 +94,9 @@ public class MainActivity extends AppCompatActivity {
 
         // Preview: just play the audio, don't share
         binding.btnPreview.setOnClickListener(v -> previewAudio());
+
+        // Voice picker — fetches live list from API
+        binding.btnPickVoice.setOnClickListener(v -> pickVoice());
 
         // Clear
         binding.btnClear.setOnClickListener(v -> {
@@ -264,6 +269,65 @@ public class MainActivity extends AppCompatActivity {
                 }
             })
             .setNeutralButton("Settings", (d, w) -> openSettings())
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
+    private void pickVoice() {
+        String apiKey = prefs.getApiKey();
+        if (apiKey.isEmpty()) {
+            showApiKeyDialog();
+            return;
+        }
+
+        setUiLoading(true);
+        binding.tvStatus.setText("Fetching available voices...");
+        binding.tvStatus.setVisibility(View.VISIBLE);
+
+        executor.execute(() -> {
+            try {
+                List<GoogleTtsClient.VoiceInfo> voices = ttsClient.fetchAvailableVoices(apiKey);
+                mainHandler.post(() -> {
+                    setUiLoading(false);
+                    if (voices.isEmpty()) {
+                        showErrorDialog("No Voices Found",
+                            "No English female voices were found in your Google Cloud project.\n\n" +
+                            "Make sure:\n• The Cloud Text-to-Speech API is enabled\n• Billing is linked to your project");
+                        return;
+                    }
+                    showVoicePickerDialog(voices);
+                });
+            } catch (Exception e) {
+                mainHandler.post(() -> {
+                    setUiLoading(false);
+                    showErrorDialog("Could Not Fetch Voices", e.getMessage());
+                });
+            }
+        });
+    }
+
+    private void showVoicePickerDialog(List<GoogleTtsClient.VoiceInfo> voices) {
+        String currentVoice = prefs.getVoiceName();
+
+        String[] labels = new String[voices.size()];
+        int selectedIndex = 0;
+        for (int i = 0; i < voices.size(); i++) {
+            labels[i] = voices.get(i).label();
+            if (voices.get(i).name.equals(currentVoice)) selectedIndex = i;
+        }
+
+        final int[] chosen = {selectedIndex};
+
+        new AlertDialog.Builder(this)
+            .setTitle("Choose Voice")
+            .setSingleChoiceItems(labels, selectedIndex, (d, which) -> chosen[0] = which)
+            .setPositiveButton("Select", (d, w) -> {
+                GoogleTtsClient.VoiceInfo picked = voices.get(chosen[0]);
+                prefs.setVoiceName(picked.name);
+                // Update footer text
+                binding.tvVoiceInfo.setText("Voice: " + picked.label());
+                showToast("Voice set to: " + picked.label());
+            })
             .setNegativeButton("Cancel", null)
             .show();
     }

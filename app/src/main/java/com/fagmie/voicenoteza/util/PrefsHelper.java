@@ -11,8 +11,8 @@ public class PrefsHelper {
 
     private final SharedPreferences prefs;
 
-    // Default: Standard SA Female — works on all accounts without billing
-    public static final String DEFAULT_VOICE = "en-ZA-Standard-A";
+    // No hardcoded default — user picks from live API voice list on first use
+    public static final String DEFAULT_VOICE = "";
     public static final float  DEFAULT_RATE  = 1.0f;
     public static final float  DEFAULT_PITCH = 0.0f;
 
@@ -30,6 +30,10 @@ public class PrefsHelper {
 
     public String getVoiceName() {
         return prefs.getString("voice_name", DEFAULT_VOICE);
+    }
+
+    public void setVoiceName(String voiceName) {
+        prefs.edit().putString("voice_name", voiceName).apply();
     }
 
     /** Speaking rate: 0.25–4.0. 1.0 = normal speed. */

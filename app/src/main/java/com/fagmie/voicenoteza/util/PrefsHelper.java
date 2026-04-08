@@ -21,11 +21,11 @@ public class PrefsHelper {
     }
 
     public String getApiKey() {
-        return prefs.getString("api_key", "");
+        return prefs.getString("api_key", "").trim();
     }
 
     public void setApiKey(String key) {
-        prefs.edit().putString("api_key", key).apply();
+        prefs.edit().putString("api_key", key.trim()).apply();
     }
 
     public String getVoiceName() {

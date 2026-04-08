@@ -106,12 +106,15 @@ public class GoogleTtsClient {
             .build();
 
         try (Response response = httpClient.newCall(request).execute()) {
-            if (response.code() == 400 || response.code() == 403) {
-                throw new ApiKeyException("API key invalid or TTS API not enabled");
-            }
+            String body = response.body() != null ? response.body().string() : "empty response";
             if (!response.isSuccessful()) {
-                String body = response.body() != null ? response.body().string() : "unknown";
-                throw new IOException("TTS API error " + response.code() + ": " + body);
+                // Only throw ApiKeyException for true auth failures
+                if (response.code() == 403) {
+                    throw new ApiKeyException("HTTP 403 — key may lack TTS API permission. Body: " + body);
+                }
+                // For everything else, throw a plain IOException with the full body
+                // so the real cause is shown to the user
+                throw new IOException("HTTP " + response.code() + ": " + body);
             }
 
             String responseBody = response.body().string();

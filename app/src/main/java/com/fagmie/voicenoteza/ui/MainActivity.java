@@ -136,13 +136,12 @@ public class MainActivity extends AppCompatActivity {
             } catch (GoogleTtsClient.ApiKeyException e) {
                 mainHandler.post(() -> {
                     setUiLoading(false);
-                    showToast("Invalid API key — please check Settings");
-                    showApiKeyDialog();
+                    showErrorDialog("API Key / Permission Error", e.getMessage());
                 });
             } catch (Exception e) {
                 mainHandler.post(() -> {
                     setUiLoading(false);
-                    showToast("Error: " + e.getMessage());
+                    showErrorDialog("TTS Error", e.getClass().getSimpleName() + ": " + e.getMessage());
                 });
             }
         });
@@ -172,7 +171,7 @@ public class MainActivity extends AppCompatActivity {
             } catch (Exception e) {
                 mainHandler.post(() -> {
                     setUiLoading(false);
-                    showToast("Preview error: " + e.getMessage());
+                    showErrorDialog("Preview Error", e.getClass().getSimpleName() + ": " + e.getMessage());
                 });
             }
         });
@@ -285,6 +284,14 @@ public class MainActivity extends AppCompatActivity {
         } else {
             binding.tvStatus.setVisibility(View.GONE);
         }
+    }
+
+    private void showErrorDialog(String title, String message) {
+        new AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton("OK", null)
+            .show();
     }
 
     private void showToast(String msg) {

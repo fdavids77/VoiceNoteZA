@@ -11,8 +11,8 @@ public class PrefsHelper {
 
     private final SharedPreferences prefs;
 
-    // Default: Neural2 SA Female — best quality voice
-    public static final String DEFAULT_VOICE = "en-ZA-Neural2-A";
+    // Default: Standard SA Female — works on all accounts without billing
+    public static final String DEFAULT_VOICE = "en-ZA-Standard-A";
     public static final float  DEFAULT_RATE  = 1.0f;
     public static final float  DEFAULT_PITCH = 0.0f;
 

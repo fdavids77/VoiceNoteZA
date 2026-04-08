@@ -28,7 +28,7 @@
             app:summary="South African English Female"
             app:entries="@array/voice_labels"
             app:entryValues="@array/voice_values"
-            app:defaultValue="en-ZA-Neural2-A"
+            app:defaultValue="en-ZA-Standard-A"
             app:iconSpaceReserved="false" />
 
         <ListPreference

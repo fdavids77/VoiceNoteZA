@@ -204,6 +204,51 @@
 
             </LinearLayout>
 
+            <!-- ── ElevenLabs MP3 Import section ── -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="2dp"
+                app:cardBackgroundColor="@color/surface">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="ElevenLabs SA Voice (Free Tier)"
+                        android:textColor="@color/primary"
+                        android:textStyle="bold"
+                        android:textSize="13sp"
+                        android:layout_marginBottom="4dp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="1. Go to elevenlabs.io → type message → generate\n2. Download the MP3\n3. Tap Import below to send it as a WhatsApp voice note"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"
+                        android:lineSpacingMultiplier="1.5"
+                        android:layout_marginBottom="12dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_import_mp3"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:text="📂  Import ElevenLabs MP3 → WhatsApp"
+                        android:textSize="13sp"
+                        app:backgroundTint="@color/primary"
+                        app:cornerRadius="24dp" />
+
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
             <!-- Info footer -->
             <TextView
                 android:id="@+id/tv_voice_info"

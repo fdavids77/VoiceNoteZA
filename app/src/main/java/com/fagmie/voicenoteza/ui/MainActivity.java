@@ -15,6 +15,8 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
@@ -26,6 +28,8 @@ import com.fagmie.voicenoteza.tts.GoogleTtsClient;
 import com.fagmie.voicenoteza.util.PrefsHelper;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -41,6 +45,9 @@ public class MainActivity extends AppCompatActivity {
 
     private static final int MAX_CHARS = 1000;
 
+    // Launcher for picking an MP3 file from Downloads
+    private ActivityResultLauncher<String[]> mp3PickerLauncher;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -53,6 +60,14 @@ public class MainActivity extends AppCompatActivity {
         prefs            = new PrefsHelper(this);
         googleClient     = new GoogleTtsClient(this);
         elevenLabsClient = new ElevenLabsClient(this);
+
+        // Register MP3 file picker — must be done before onStart
+        mp3PickerLauncher = registerForActivityResult(
+            new ActivityResultContracts.OpenDocument(),
+            uri -> {
+                if (uri != null) handleImportedMp3(uri);
+            }
+        );
 
         setupCharCounter();
         setupButtons();
@@ -84,9 +99,68 @@ public class MainActivity extends AppCompatActivity {
         binding.btnShareOther.setOnClickListener(v -> generateAndShare(false));
         binding.btnPreview.setOnClickListener(v -> previewAudio());
         binding.btnPickVoice.setOnClickListener(v -> pickVoice());
+        binding.btnImportMp3.setOnClickListener(v -> openMp3Picker());
         binding.btnClear.setOnClickListener(v -> {
             binding.etMessage.setText("");
             binding.etMessage.requestFocus();
+        });
+    }
+
+    // ── MP3 Import (ElevenLabs downloaded files) ──────────────────────────────
+
+    private void openMp3Picker() {
+        // Open system file picker filtered to audio files
+        mp3PickerLauncher.launch(new String[]{"audio/*", "audio/mpeg", "audio/mp3"});
+    }
+
+    private void handleImportedMp3(Uri sourceUri) {
+        setUiLoading(true, "Importing audio file...");
+
+        executor.execute(() -> {
+            try {
+                // Copy the picked file into our FileProvider cache dir
+                File outFile = new File(
+                    new File(getCacheDir(), "voice_notes"),
+                    "voice_note_imported.mp3"
+                );
+                outFile.getParentFile().mkdirs();
+
+                try (InputStream in = getContentResolver().openInputStream(sourceUri);
+                     FileOutputStream out = new FileOutputStream(outFile)) {
+                    if (in == null) throw new Exception("Could not open selected file");
+                    byte[] buf = new byte[8192];
+                    int len;
+                    while ((len = in.read(buf)) != -1) out.write(buf, 0, len);
+                }
+
+                mainHandler.post(() -> {
+                    setUiLoading(false, null);
+                    // Ask user where to share
+                    new AlertDialog.Builder(this)
+                        .setTitle("Send Voice Note")
+                        .setMessage("Where do you want to send this voice note?")
+                        .setPositiveButton("WhatsApp", (d, w) -> shareToWhatsApp(outFile))
+                        .setNeutralButton("Other App", (d, w) -> shareToAnyApp(outFile))
+                        .setNegativeButton("Preview First", (d, w) -> {
+                            playAudioFile(outFile);
+                            // Re-show dialog after preview with a small delay
+                            mainHandler.postDelayed(() ->
+                                new AlertDialog.Builder(this)
+                                    .setTitle("Send Voice Note")
+                                    .setPositiveButton("WhatsApp", (d2, w2) -> shareToWhatsApp(outFile))
+                                    .setNeutralButton("Other App", (d2, w2) -> shareToAnyApp(outFile))
+                                    .setNegativeButton("Cancel", null)
+                                    .show(), 500);
+                        })
+                        .show();
+                });
+
+            } catch (Exception e) {
+                mainHandler.post(() -> {
+                    setUiLoading(false, null);
+                    showErrorDialog("Import Failed", e.getMessage());
+                });
+            }
         });
     }
 

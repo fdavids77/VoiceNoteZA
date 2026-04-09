@@ -8,10 +8,21 @@
         android:maxSdkVersion="29" />
 
     <queries>
-        <!-- Allow sharing to WhatsApp -->
+        <!-- WhatsApp original + Business -->
         <package android:name="com.whatsapp" />
         <package android:name="com.whatsapp.w4b" />
-        <!-- Allow any app that can receive audio/ogg shares -->
+        <!-- WhatsApp clones 1-10 from clone-factory -->
+        <package android:name="com.whatsapp.clone1" />
+        <package android:name="com.whatsapp.clone2" />
+        <package android:name="com.whatsapp.clone3" />
+        <package android:name="com.whatsapp.clone4" />
+        <package android:name="com.whatsapp.clone5" />
+        <package android:name="com.whatsapp.clone6" />
+        <package android:name="com.whatsapp.clone7" />
+        <package android:name="com.whatsapp.clone8" />
+        <package android:name="com.whatsapp.clone9" />
+        <package android:name="com.whatsapp.clone10" />
+        <!-- Allow any app that can receive audio shares -->
         <intent>
             <action android:name="android.intent.action.SEND" />
             <data android:mimeType="audio/*" />

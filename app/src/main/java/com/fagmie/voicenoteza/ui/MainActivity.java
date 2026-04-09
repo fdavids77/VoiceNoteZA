@@ -30,6 +30,7 @@ import com.fagmie.voicenoteza.util.PrefsHelper;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -309,25 +310,104 @@ public class MainActivity extends AppCompatActivity {
 
     // ── Sharing ───────────────────────────────────────────────────────────────
 
+    /**
+     * Holds info about an installed WhatsApp instance (original or clone).
+     */
+    private static class WhatsAppInstance {
+        final String packageName;
+        final String label;
+
+        WhatsAppInstance(String packageName, String label) {
+            this.packageName = packageName;
+            this.label = label;
+        }
+    }
+
+    /**
+     * Scans installed packages for all WhatsApp instances:
+     * - com.whatsapp              → WhatsApp
+     * - com.whatsapp.w4b          → WhatsApp Business
+     * - com.whatsapp.clone1..10   → your clones from clone-factory
+     */
+    private List<WhatsAppInstance> getInstalledWhatsAppInstances() {
+        List<WhatsAppInstance> found = new ArrayList<>();
+        PackageManager pm = getPackageManager();
+
+        // Build full list of candidate packages
+        List<String[]> candidates = new ArrayList<>();
+        candidates.add(new String[]{"com.whatsapp",       "WhatsApp"});
+        candidates.add(new String[]{"com.whatsapp.w4b",   "WhatsApp Business"});
+        for (int i = 1; i <= 10; i++) {
+            candidates.add(new String[]{"com.whatsapp.clone" + i, "WhatsApp Clone " + i});
+        }
+
+        for (String[] candidate : candidates) {
+            try {
+                pm.getPackageInfo(candidate[0], 0);
+                // Get the actual app label from the installed package
+                String appLabel;
+                try {
+                    appLabel = pm.getApplicationLabel(
+                        pm.getApplicationInfo(candidate[0], 0)
+                    ).toString();
+                } catch (Exception e) {
+                    appLabel = candidate[1]; // fallback to our default label
+                }
+                found.add(new WhatsAppInstance(candidate[0], appLabel));
+            } catch (PackageManager.NameNotFoundException ignored) {
+                // Not installed — skip
+            }
+        }
+        return found;
+    }
+
     private void shareToWhatsApp(File audioFile) {
+        List<WhatsAppInstance> instances = getInstalledWhatsAppInstances();
+
+        if (instances.isEmpty()) {
+            showToast("No WhatsApp instances found");
+            shareToAnyApp(audioFile);
+            return;
+        }
+
+        if (instances.size() == 1) {
+            // Only one installed — send directly, no picker needed
+            sendToWhatsAppPackage(audioFile, instances.get(0).packageName);
+            return;
+        }
+
+        // Multiple instances — show picker dialog
+        String[] labels = new String[instances.size()];
+        for (int i = 0; i < instances.size(); i++) {
+            labels[i] = instances.get(i).label;
+        }
+
+        new AlertDialog.Builder(this)
+            .setTitle("Send to which WhatsApp?")
+            .setItems(labels, (dialog, which) ->
+                sendToWhatsAppPackage(audioFile, instances.get(which).packageName)
+            )
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
+    private void sendToWhatsAppPackage(File audioFile, String packageName) {
         String mimeType = audioFile.getName().endsWith(".mp3") ? "audio/mpeg" : "audio/ogg";
         Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", audioFile);
 
-        String[] packages = {"com.whatsapp", "com.whatsapp.w4b"};
-        for (String pkg : packages) {
-            try {
-                getPackageManager().getPackageInfo(pkg, 0);
-                Intent intent = new Intent(Intent.ACTION_SEND);
-                intent.setType(mimeType);
-                intent.putExtra(Intent.EXTRA_STREAM, uri);
-                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                intent.setPackage(pkg);
-                startActivity(intent);
-                return;
-            } catch (PackageManager.NameNotFoundException ignored) {}
+        Intent intent = new Intent(Intent.ACTION_SEND);
+        intent.setType(mimeType);
+        intent.putExtra(Intent.EXTRA_STREAM, uri);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        intent.setPackage(packageName);
+
+        try {
+            startActivity(intent);
+        } catch (Exception e) {
+            // Fallback — open chooser if direct launch fails
+            showToast("Could not open " + packageName + " directly");
+            shareToAnyApp(audioFile);
         }
-        showToast("WhatsApp not found — sharing to other apps");
-        shareToAnyApp(audioFile);
     }
 
     private void shareToAnyApp(File audioFile) {

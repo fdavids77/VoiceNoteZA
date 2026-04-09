@@ -32,6 +32,7 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -310,80 +311,104 @@ public class MainActivity extends AppCompatActivity {
 
     // ── Sharing ───────────────────────────────────────────────────────────────
 
-    /**
-     * Holds info about an installed WhatsApp instance (original or clone).
-     */
     private static class WhatsAppInstance {
         final String packageName;
         final String label;
-
-        WhatsAppInstance(String packageName, String label) {
-            this.packageName = packageName;
-            this.label = label;
-        }
+        WhatsAppInstance(String p, String l) { packageName = p; label = l; }
     }
 
     /**
-     * Scans installed packages for all WhatsApp instances:
-     * - com.whatsapp              → WhatsApp
-     * - com.whatsapp.w4b          → WhatsApp Business
-     * - com.whatsapp.clone1..10   → your clones from clone-factory
+     * Detects all installed WhatsApp instances.
+     *
+     * Uses two strategies:
+     * 1. Direct getPackageInfo() with MATCH_ALL — catches most cases
+     * 2. Querying all installed packages and filtering by name — catches
+     *    anything missed by strategy 1 due to visibility restrictions
      */
     private List<WhatsAppInstance> getInstalledWhatsAppInstances() {
         List<WhatsAppInstance> found = new ArrayList<>();
         PackageManager pm = getPackageManager();
+        Set<String> seen = new java.util.HashSet<>();
 
-        // Build full list of candidate packages
+        // Strategy 1 — direct lookup with MATCH_ALL flag
         List<String[]> candidates = new ArrayList<>();
-        candidates.add(new String[]{"com.whatsapp",       "WhatsApp"});
-        candidates.add(new String[]{"com.whatsapp.w4b",   "WhatsApp Business"});
+        candidates.add(new String[]{"com.whatsapp",     "WhatsApp"});
+        candidates.add(new String[]{"com.whatsapp.w4b", "WhatsApp Business"});
         for (int i = 1; i <= 10; i++) {
             candidates.add(new String[]{"com.whatsapp.clone" + i, "WhatsApp Clone " + i});
         }
 
-        for (String[] candidate : candidates) {
+        for (String[] c : candidates) {
             try {
-                pm.getPackageInfo(candidate[0], 0);
-                // Get the actual app label from the installed package
-                String appLabel;
-                try {
-                    appLabel = pm.getApplicationLabel(
-                        pm.getApplicationInfo(candidate[0], 0)
-                    ).toString();
-                } catch (Exception e) {
-                    appLabel = candidate[1]; // fallback to our default label
+                // FLAG_MATCH_UNINSTALLED_PACKAGES (0x00002000) catches more cases
+                // on Android 11+ than the default 0 flag
+                pm.getPackageInfo(c[0], PackageManager.MATCH_UNINSTALLED_PACKAGES);
+                if (!seen.contains(c[0])) {
+                    seen.add(c[0]);
+                    found.add(new WhatsAppInstance(c[0], getAppLabel(pm, c[0], c[1])));
                 }
-                found.add(new WhatsAppInstance(candidate[0], appLabel));
-            } catch (PackageManager.NameNotFoundException ignored) {
-                // Not installed — skip
-            }
+            } catch (PackageManager.NameNotFoundException ignored) {}
         }
+
+        // Strategy 2 — scan ALL installed packages for anything with "whatsapp" in name
+        // This catches clones with non-standard package names
+        try {
+            List<android.content.pm.ApplicationInfo> apps =
+                pm.getInstalledApplications(PackageManager.MATCH_UNINSTALLED_PACKAGES);
+            for (android.content.pm.ApplicationInfo app : apps) {
+                String pkg = app.packageName.toLowerCase();
+                if (pkg.contains("whatsapp") && !seen.contains(app.packageName)) {
+                    seen.add(app.packageName);
+                    found.add(new WhatsAppInstance(
+                        app.packageName,
+                        getAppLabel(pm, app.packageName, app.packageName)
+                    ));
+                }
+            }
+        } catch (Exception ignored) {}
+
         return found;
+    }
+
+    private String getAppLabel(PackageManager pm, String pkg, String fallback) {
+        try {
+            return pm.getApplicationLabel(
+                pm.getApplicationInfo(pkg, 0)
+            ).toString();
+        } catch (Exception e) {
+            return fallback;
+        }
     }
 
     private void shareToWhatsApp(File audioFile) {
         List<WhatsAppInstance> instances = getInstalledWhatsAppInstances();
 
+        // Debug — show what was found (remove after confirming it works)
         if (instances.isEmpty()) {
-            showToast("No WhatsApp instances found");
-            shareToAnyApp(audioFile);
+            new AlertDialog.Builder(this)
+                .setTitle("No WhatsApp Found")
+                .setMessage("Could not detect any WhatsApp instances.\n\nPackages scanned:\ncom.whatsapp\ncom.whatsapp.clone1–10\n\nFalling back to system share sheet.")
+                .setPositiveButton("Share Anyway", (d, w) -> shareToAnyApp(audioFile))
+                .setNegativeButton("Cancel", null)
+                .show();
             return;
         }
 
         if (instances.size() == 1) {
-            // Only one installed — send directly, no picker needed
             sendToWhatsAppPackage(audioFile, instances.get(0).packageName);
             return;
         }
 
-        // Multiple instances — show picker dialog
+        // Build labels with package name shown for disambiguation
         String[] labels = new String[instances.size()];
         for (int i = 0; i < instances.size(); i++) {
-            labels[i] = instances.get(i).label;
+            WhatsAppInstance inst = instances.get(i);
+            // Show package name in brackets so you know exactly which is which
+            labels[i] = inst.label + "\n  " + inst.packageName;
         }
 
         new AlertDialog.Builder(this)
-            .setTitle("Send to which WhatsApp?")
+            .setTitle("Send to which WhatsApp? (" + instances.size() + " found)")
             .setItems(labels, (dialog, which) ->
                 sendToWhatsAppPackage(audioFile, instances.get(which).packageName)
             )
@@ -404,8 +429,8 @@ public class MainActivity extends AppCompatActivity {
         try {
             startActivity(intent);
         } catch (Exception e) {
-            // Fallback — open chooser if direct launch fails
-            showToast("Could not open " + packageName + " directly");
+            showErrorDialog("Could not open " + packageName,
+                "Error: " + e.getMessage() + "\n\nTrying system share sheet instead.");
             shareToAnyApp(audioFile);
         }
     }

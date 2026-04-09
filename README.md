@@ -1,99 +1,116 @@
 # VoiceNoteZA 🎙️🇿🇦
 
-> **Type text → Send as a South African female voice note on WhatsApp**
+> **Type text → Send as a voice note on WhatsApp — built for when you can't speak**
 
-Built for post-surgery or any situation where you can't speak but still want to
-communicate naturally over WhatsApp voice notes.
-
----
-
-## What It Does
-
-1. You type your message
-2. Tap **Send to WhatsApp as Voice Note**
-3. The app calls Google Cloud TTS with a **South African English female voice**
-4. Generates an `.ogg` audio file (WhatsApp's native voice note format)
-5. Opens WhatsApp with the voice note ready to send to any chat
-
----
-
-## Screenshots
-
-| Main Screen | Settings |
-|---|---|
-| _(type message, one tap to WhatsApp)_ | _(API key, voice quality, speed, pitch)_ |
+Originally built for post-throat-surgery communication, VoiceNoteZA converts typed text into natural-sounding voice notes and sends them directly to any WhatsApp instance — including clones.
 
 ---
 
 ## Features
 
-- 🇿🇦 **Authentic SA English female voice** — Neural2 quality (most natural)
-- 📱 **Direct WhatsApp share** — opens as a voice note, not a file attachment
-- 🔊 **Preview before sending** — listen to the audio first
-- ⚙️ **Adjustable speed and pitch** — speak slower post-op if needed
-- 🆓 **Completely free** for personal use (1M characters/month free tier)
-- 🔒 **No data stored** — API key stays on your device in SharedPreferences
+- 🇿🇦 **South African voices** — via ElevenLabs community voice library
+- 🤖 **Dual TTS provider** — ElevenLabs or Google Cloud TTS, switchable in-app
+- 📂 **Import MP3** — download from ElevenLabs website, import and send as WhatsApp voice note (free tier workaround)
+- 📱 **Multi-instance WhatsApp picker** — detects and targets original, Business, and clones 1–10
+- 🔊 **Preview before sending** — listen to the audio before it goes out
+- 🌐 **Live voice picker** — fetches available voices directly from the API
+- ↗️ **Share to any app** — Telegram, Signal, or any audio-capable app
+- 🆓 **Free for personal use** — stays within free tier limits for normal WhatsApp usage
+- 🔒 **Private** — API keys stored on-device only, never transmitted
+
+---
+
+## How It Works
+
+### Option A — API-generated voice note (Google or ElevenLabs paid tier)
+1. Type your message in the app
+2. Tap **Send to WhatsApp as Voice Note**
+3. App calls TTS API → generates audio
+4. Pick which WhatsApp to send to
+5. Recipient hears a natural voice note
+
+### Option B — Import ElevenLabs MP3 (free tier workaround ✅)
+1. Go to **elevenlabs.io** in your browser
+2. Pick a South African community voice
+3. Type your message → Generate → **Download MP3**
+4. Open VoiceNoteZA → tap **📂 Import ElevenLabs MP3 → WhatsApp**
+5. Select the downloaded MP3 → Preview or send directly
 
 ---
 
 ## Setup
 
-### Step 1 — Get a free Google Cloud API key
-
-1. Go to [console.cloud.google.com](https://console.cloud.google.com)
-2. Sign in with your Google account
-3. Create a new project (e.g. "VoiceNoteZA")
-4. Go to **APIs & Services → Library**
-5. Search for **"Cloud Text-to-Speech API"** → click **Enable**
-6. Go to **APIs & Services → Credentials**
-7. Click **Create Credentials → API Key**
-8. Copy the key (starts with `AIza...`)
-
-> **Cost:** Free up to **1 million characters/month** on Neural2 voice.
-> A typical WhatsApp message is ~100 chars → that's 10,000 free messages/month.
-> You will not be charged for personal use.
-
-### Step 2 — Install the app
+### Install the App
 
 #### Option A — Download pre-built APK (easiest)
-1. Go to the [Releases](../../releases) page
-2. Download `VoiceNoteZA-debug.apk`
-3. Enable **Install from unknown sources** on your phone
-4. Install and open
+1. Go to the [Actions](../../actions) tab
+2. Click the latest successful workflow run
+3. Download **VoiceNoteZA-debug** artifact
+4. Unzip → install `app-debug.apk` on your phone
+5. Enable **Install from unknown sources** if prompted
 
 #### Option B — Build from source
 ```bash
 git clone https://github.com/fdavids77/VoiceNoteZA.git
 cd VoiceNoteZA
 ./gradlew assembleDebug
-# APK at: app/build/outputs/apk/debug/app-debug.apk
+# APK: app/build/outputs/apk/debug/app-debug.apk
 ```
 
-### Step 3 — Enter your API key
+---
 
-On first launch, the app asks for your API key.  
-Enter it and tap **Save**. You're ready.
+### Provider Setup
+
+On first launch the app asks which TTS provider to use:
+
+#### ElevenLabs (recommended for SA voices)
+
+1. Sign up free at [elevenlabs.io](https://elevenlabs.io)
+2. Go to **Profile → API Keys** → copy your key (starts with `sk_...`)
+3. Paste into the app when prompted
+4. Tap **Pick Voice** to fetch your available voices
+5. For SA community voices: go to **elevenlabs.io/voice-library** → search **"South African"** → **Add to My Voices** → they appear in the picker
+
+> **Free tier note:** ElevenLabs free tier (10,000 chars/month) does not include Voice Library API access. Use **Option B (Import MP3)** above as a free workaround — generate on the website, download, import into the app.
+
+#### Google Cloud TTS
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com)
+2. Create a project → **APIs & Services → Library** → enable **Cloud Text-to-Speech API**
+3. **APIs & Services → Credentials → Create Credentials → API Key**
+4. Link a billing account (required for Neural2/WaveNet voices — free tier still applies)
+5. Paste key into the app → tap **Pick Voice**
+
+> **SA voice availability:** Google Cloud en-ZA voices require billing to be linked even though usage stays free. Without billing only en-GB voices are available.
+
+| Voice Type | Free Tier | Quality |
+|------------|-----------|---------|
+| Neural2 | 1M chars/month | ⭐⭐⭐⭐⭐ |
+| WaveNet | 1M chars/month | ⭐⭐⭐⭐ |
+| Standard | 4M chars/month | ⭐⭐⭐ |
 
 ---
 
-## Voice Options
+## WhatsApp Multi-Instance Support
 
-| Voice | Quality | Free Tier |
-|-------|---------|-----------|
-| `en-ZA-Neural2-A` | ⭐⭐⭐ Best — most natural SA female | 1M chars/month |
-| `en-ZA-Wavenet-A` | ⭐⭐ Very good | 1M chars/month |
-| `en-ZA-Standard-A` | ⭐ Basic | 4M chars/month |
+VoiceNoteZA detects all installed WhatsApp instances and shows a picker:
 
-Change voice in **Settings → Voice Quality**.
+```
+Send to which WhatsApp?
+────────────────────────
+  WhatsApp
+  WhatsApp Business
+  WhatsApp Clone 1
+  WhatsApp Clone 3
+  Cancel
+```
 
----
+Supported package names detected automatically:
+- `com.whatsapp` — WhatsApp original
+- `com.whatsapp.w4b` — WhatsApp Business
+- `com.whatsapp.clone1` → `com.whatsapp.clone10` — clones
 
-## How WhatsApp Voice Notes Work
-
-WhatsApp voice notes are `.ogg` files encoded in **Opus** codec at 16kHz.
-This app outputs exactly that format from the Google Cloud TTS API
-(`OGG_OPUS` encoding), so WhatsApp receives it as a genuine voice note —
-not a file attachment.
+If only one instance is installed, it sends directly without showing the picker.
 
 ---
 
@@ -102,59 +119,67 @@ not a file attachment.
 ```
 app/src/main/java/com/fagmie/voicenoteza/
 ├── ui/
-│   ├── MainActivity.java       # Main screen — text input + share buttons
-│   └── SettingsActivity.java   # Settings screen (API key, voice, speed, pitch)
+│   ├── MainActivity.java        # Main screen — text input, share, import MP3
+│   └── SettingsActivity.java    # Settings — API key, voice, speed, pitch
 ├── tts/
-│   └── GoogleTtsClient.java    # Google Cloud TTS API client
+│   ├── GoogleTtsClient.java     # Google Cloud TTS API client
+│   └── ElevenLabsClient.java    # ElevenLabs TTS API client
 └── util/
-    └── PrefsHelper.java        # SharedPreferences wrapper
+    └── PrefsHelper.java         # SharedPreferences — supports both providers
 ```
 
 ---
 
-## Building a Signed Release APK via GitHub Actions
+## Building a Signed Release APK
 
-The included workflow (`.github/workflows/build.yml`) automatically builds
-a debug APK on every push.
+The GitHub Actions workflow (`.github/workflows/build.yml`) builds a debug APK on every push automatically.
 
-To build a **signed release APK**:
+To produce a signed release APK:
 
 1. Generate a keystore:
-   ```bash
-   keytool -genkey -v -keystore voicenoteza.jks \
-     -keyalg RSA -keysize 2048 -validity 10000 \
-     -alias voicenoteza
-   ```
+```bash
+keytool -genkey -v -keystore voicenoteza.jks \
+  -keyalg RSA -keysize 2048 -validity 10000 \
+  -alias voicenoteza
+```
 
-2. Add these secrets to your GitHub repo  
-   (**Settings → Secrets and variables → Actions**):
-   | Secret | Value |
-   |--------|-------|
-   | `KEYSTORE_BASE64` | `base64 -w 0 voicenoteza.jks` |
-   | `KEY_STORE_PASSWORD` | your keystore password |
-   | `KEY_ALIAS` | `voicenoteza` |
-   | `KEY_PASSWORD` | your key password |
+2. Add secrets in **GitHub → Settings → Secrets and variables → Actions**:
 
-3. Create a GitHub Release (tag it `v1.0.0`) →  
-   The workflow automatically attaches the signed APK.
+| Secret | Value |
+|--------|-------|
+| `KEYSTORE_BASE64` | `base64 -w 0 voicenoteza.jks` |
+| `KEY_STORE_PASSWORD` | your keystore password |
+| `KEY_ALIAS` | `voicenoteza` |
+| `KEY_PASSWORD` | your key password |
+
+3. Create a GitHub Release tagged `v1.0.0` → the workflow attaches the signed APK automatically.
 
 ---
 
 ## Requirements
 
 - Android 8.0+ (API 26)
-- Internet connection (for Google Cloud TTS API calls)
-- WhatsApp installed (for direct voice note sharing)
-- Google Cloud API key with Text-to-Speech API enabled
+- Internet connection (for API-based TTS)
+- WhatsApp installed (original, Business, or clone)
 
 ---
 
 ## Privacy
 
-- Your typed text is sent to Google Cloud TTS API over HTTPS
-- Audio is generated on Google's servers and returned to your device
-- Nothing is stored remotely — the API key lives only on your device
-- See [Google Cloud Privacy Policy](https://cloud.google.com/terms/cloud-privacy-notice)
+- Typed text is sent to Google/ElevenLabs servers over HTTPS for audio generation
+- API keys are stored locally on-device in SharedPreferences — never transmitted elsewhere
+- No analytics, no tracking, no ads
+
+---
+
+## Tech Stack
+
+- [ElevenLabs TTS API](https://elevenlabs.io/docs/api-reference)
+- [Google Cloud Text-to-Speech](https://cloud.google.com/text-to-speech)
+- [OkHttp](https://square.github.io/okhttp/)
+- [Gson](https://github.com/google/gson)
+- [Material Components for Android](https://material.io/develop/android)
+- [AndroidX Preference](https://developer.android.com/jetpack/androidx/releases/preference)
 
 ---
 
@@ -164,10 +189,4 @@ MIT License — see [LICENSE](LICENSE)
 
 ---
 
-## Credits
-
-Built with:
-- [Google Cloud Text-to-Speech](https://cloud.google.com/text-to-speech)
-- [OkHttp](https://square.github.io/okhttp/)
-- [Gson](https://github.com/google/gson)
-- [Material Components for Android](https://material.io/develop/android)
+*Built with [Claude](https://claude.ai) — developed collaboratively via AI-assisted Android development* 🤖

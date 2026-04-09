@@ -21,30 +21,24 @@ import androidx.core.content.FileProvider;
 
 import com.fagmie.voicenoteza.R;
 import com.fagmie.voicenoteza.databinding.ActivityMainBinding;
+import com.fagmie.voicenoteza.tts.ElevenLabsClient;
 import com.fagmie.voicenoteza.tts.GoogleTtsClient;
 import com.fagmie.voicenoteza.util.PrefsHelper;
 
-import java.util.List;
-
 import java.io.File;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/**
- * VoiceNoteZA — Main Activity
- *
- * Converts typed text to a South African female voice note (.ogg)
- * and shares it directly to WhatsApp as a voice message.
- */
 public class MainActivity extends AppCompatActivity {
 
     private ActivityMainBinding binding;
     private ExecutorService executor;
     private Handler mainHandler;
-    private GoogleTtsClient ttsClient;
+    private GoogleTtsClient googleClient;
+    private ElevenLabsClient elevenLabsClient;
     private PrefsHelper prefs;
 
-    // Max chars for a sensible voice note (≈ 2 minutes of speech)
     private static final int MAX_CHARS = 1000;
 
     @Override
@@ -54,14 +48,19 @@ public class MainActivity extends AppCompatActivity {
         setContentView(binding.getRoot());
         setSupportActionBar(binding.toolbar);
 
-        executor = Executors.newSingleThreadExecutor();
-        mainHandler = new Handler(Looper.getMainLooper());
-        prefs = new PrefsHelper(this);
-        ttsClient = new GoogleTtsClient(this);
+        executor         = Executors.newSingleThreadExecutor();
+        mainHandler      = new Handler(Looper.getMainLooper());
+        prefs            = new PrefsHelper(this);
+        googleClient     = new GoogleTtsClient(this);
+        elevenLabsClient = new ElevenLabsClient(this);
 
         setupCharCounter();
         setupButtons();
-        checkApiKeyOnFirstLaunch();
+        updateVoiceInfoLabel();
+
+        if (!prefs.isFullyConfigured()) {
+            showProviderSetupDialog();
+        }
     }
 
     private void setupCharCounter() {
@@ -72,278 +71,305 @@ public class MainActivity extends AppCompatActivity {
             public void afterTextChanged(Editable s) {
                 int len = s.length();
                 binding.tvCharCount.setText(len + " / " + MAX_CHARS);
-                binding.tvCharCount.setTextColor(
-                    len > MAX_CHARS * 0.9
-                        ? getColor(R.color.warning_red)
-                        : getColor(R.color.text_secondary)
-                );
-                // Trim at hard limit
-                if (len > MAX_CHARS) {
-                    s.delete(MAX_CHARS, len);
-                }
+                binding.tvCharCount.setTextColor(len > MAX_CHARS * 0.9
+                    ? getColor(R.color.warning_red)
+                    : getColor(R.color.text_secondary));
+                if (len > MAX_CHARS) s.delete(MAX_CHARS, len);
             }
         });
     }
 
     private void setupButtons() {
-        // Main action: Generate + share to WhatsApp
         binding.btnSendWhatsApp.setOnClickListener(v -> generateAndShare(true));
-
-        // Secondary: Generate + share to any app (file manager, Telegram, etc.)
         binding.btnShareOther.setOnClickListener(v -> generateAndShare(false));
-
-        // Preview: just play the audio, don't share
         binding.btnPreview.setOnClickListener(v -> previewAudio());
-
-        // Voice picker — fetches live list from API
         binding.btnPickVoice.setOnClickListener(v -> pickVoice());
-
-        // Clear
         binding.btnClear.setOnClickListener(v -> {
             binding.etMessage.setText("");
             binding.etMessage.requestFocus();
         });
     }
 
-    private void checkApiKeyOnFirstLaunch() {
-        if (prefs.getApiKey().isEmpty()) {
-            showApiKeyDialog();
+    // ── Voice picking ─────────────────────────────────────────────────────────
+
+    private void pickVoice() {
+        if (prefs.isElevenLabs()) {
+            pickElevenLabsVoice();
+        } else {
+            pickGoogleVoice();
         }
     }
 
-    private void generateAndShare(boolean whatsAppDirect) {
-        String text = binding.etMessage.getText().toString().trim();
+    private void pickElevenLabsVoice() {
+        String apiKey = prefs.getElevenLabsApiKey();
+        if (apiKey.isEmpty()) { showElevenLabsSetup(); return; }
 
-        if (text.isEmpty()) {
-            showToast("Please type a message first");
-            return;
-        }
-
-        String apiKey = prefs.getApiKey();
-        if (apiKey.isEmpty()) {
-            showApiKeyDialog();
-            return;
-        }
-
-        setUiLoading(true);
-
+        setUiLoading(true, "Fetching ElevenLabs voices...");
         executor.execute(() -> {
             try {
-                File audioFile = ttsClient.synthesize(text, apiKey);
+                List<ElevenLabsClient.VoiceInfo> voices = elevenLabsClient.fetchAvailableVoices(apiKey);
                 mainHandler.post(() -> {
-                    setUiLoading(false);
-                    if (whatsAppDirect) {
-                        shareToWhatsApp(audioFile);
-                    } else {
-                        shareToAnyApp(audioFile);
+                    setUiLoading(false, null);
+                    if (voices.isEmpty()) {
+                        showErrorDialog("No Voices", "No voices found. Check your API key.");
+                        return;
                     }
+                    showElevenLabsVoicePicker(voices);
                 });
-            } catch (GoogleTtsClient.ApiKeyException e) {
+            } catch (ElevenLabsClient.ApiKeyException e) {
+                mainHandler.post(() -> { setUiLoading(false, null); showElevenLabsSetup(); });
+            } catch (Exception e) {
+                mainHandler.post(() -> { setUiLoading(false, null); showErrorDialog("Error", e.getMessage()); });
+            }
+        });
+    }
+
+    private void showElevenLabsVoicePicker(List<ElevenLabsClient.VoiceInfo> voices) {
+        String currentId = prefs.getElevenLabsVoiceId();
+        String[] labels  = new String[voices.size()];
+        int selected = 0;
+        for (int i = 0; i < voices.size(); i++) {
+            labels[i] = voices.get(i).label();
+            if (voices.get(i).voiceId.equals(currentId)) selected = i;
+        }
+        final int[] chosen = {selected};
+        new AlertDialog.Builder(this)
+            .setTitle("Choose Voice (SA voices first)")
+            .setSingleChoiceItems(labels, selected, (d, w) -> chosen[0] = w)
+            .setPositiveButton("Select", (d, w) -> {
+                ElevenLabsClient.VoiceInfo v = voices.get(chosen[0]);
+                prefs.setElevenLabsVoiceId(v.voiceId);
+                prefs.setElevenLabsVoiceName(v.name);
+                updateVoiceInfoLabel();
+                showToast("Voice: " + v.shortLabel());
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
+    private void pickGoogleVoice() {
+        String apiKey = prefs.getGoogleApiKey();
+        if (apiKey.isEmpty()) { showApiKeyDialog(); return; }
+
+        setUiLoading(true, "Fetching Google voices...");
+        executor.execute(() -> {
+            try {
+                List<GoogleTtsClient.VoiceInfo> voices = googleClient.fetchAvailableVoices(apiKey);
                 mainHandler.post(() -> {
-                    setUiLoading(false);
-                    showErrorDialog("API Key / Permission Error", e.getMessage());
+                    setUiLoading(false, null);
+                    if (voices.isEmpty()) { showErrorDialog("No Voices", "No English female voices found."); return; }
+                    showGoogleVoicePicker(voices);
                 });
             } catch (Exception e) {
+                mainHandler.post(() -> { setUiLoading(false, null); showErrorDialog("Error", e.getMessage()); });
+            }
+        });
+    }
+
+    private void showGoogleVoicePicker(List<GoogleTtsClient.VoiceInfo> voices) {
+        String current = prefs.getGoogleVoiceName();
+        String[] labels = new String[voices.size()];
+        int selected = 0;
+        for (int i = 0; i < voices.size(); i++) {
+            labels[i] = voices.get(i).label();
+            if (voices.get(i).name.equals(current)) selected = i;
+        }
+        final int[] chosen = {selected};
+        new AlertDialog.Builder(this)
+            .setTitle("Choose Google Voice")
+            .setSingleChoiceItems(labels, selected, (d, w) -> chosen[0] = w)
+            .setPositiveButton("Select", (d, w) -> {
+                GoogleTtsClient.VoiceInfo v = voices.get(chosen[0]);
+                prefs.setGoogleVoiceName(v.name);
+                updateVoiceInfoLabel();
+                showToast("Voice: " + v.label());
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
+    // ── Audio generation ──────────────────────────────────────────────────────
+
+    private void generateAndShare(boolean whatsAppDirect) {
+        String text = binding.etMessage.getText().toString().trim();
+        if (text.isEmpty()) { showToast("Please type a message first"); return; }
+        if (!prefs.isFullyConfigured()) { showProviderSetupDialog(); return; }
+
+        setUiLoading(true, "Generating voice...");
+        executor.execute(() -> {
+            try {
+                File audioFile = prefs.isElevenLabs()
+                    ? elevenLabsClient.synthesize(text, prefs.getElevenLabsApiKey(), prefs.getElevenLabsVoiceId())
+                    : googleClient.synthesize(text, prefs.getGoogleApiKey());
+
                 mainHandler.post(() -> {
-                    setUiLoading(false);
-                    showErrorDialog("TTS Error", e.getClass().getSimpleName() + ": " + e.getMessage());
+                    setUiLoading(false, null);
+                    if (whatsAppDirect) shareToWhatsApp(audioFile);
+                    else shareToAnyApp(audioFile);
                 });
+            } catch (ElevenLabsClient.ApiKeyException | GoogleTtsClient.ApiKeyException e) {
+                mainHandler.post(() -> { setUiLoading(false, null); showErrorDialog("API Key Error", e.getMessage()); });
+            } catch (Exception e) {
+                mainHandler.post(() -> { setUiLoading(false, null); showErrorDialog("TTS Error", e.getClass().getSimpleName() + ": " + e.getMessage()); });
             }
         });
     }
 
     private void previewAudio() {
         String text = binding.etMessage.getText().toString().trim();
-        if (text.isEmpty()) {
-            showToast("Please type a message first");
-            return;
-        }
-        String apiKey = prefs.getApiKey();
-        if (apiKey.isEmpty()) {
-            showApiKeyDialog();
-            return;
-        }
+        if (text.isEmpty()) { showToast("Please type a message first"); return; }
+        if (!prefs.isFullyConfigured()) { showProviderSetupDialog(); return; }
 
-        setUiLoading(true);
-
+        setUiLoading(true, "Generating preview...");
         executor.execute(() -> {
             try {
-                File audioFile = ttsClient.synthesize(text, apiKey);
-                mainHandler.post(() -> {
-                    setUiLoading(false);
-                    playAudioFile(audioFile);
-                });
+                File audioFile = prefs.isElevenLabs()
+                    ? elevenLabsClient.synthesize(text, prefs.getElevenLabsApiKey(), prefs.getElevenLabsVoiceId())
+                    : googleClient.synthesize(text, prefs.getGoogleApiKey());
+                mainHandler.post(() -> { setUiLoading(false, null); playAudioFile(audioFile); });
             } catch (Exception e) {
-                mainHandler.post(() -> {
-                    setUiLoading(false);
-                    showErrorDialog("Preview Error", e.getClass().getSimpleName() + ": " + e.getMessage());
-                });
+                mainHandler.post(() -> { setUiLoading(false, null); showErrorDialog("Preview Error", e.getMessage()); });
             }
         });
     }
 
+    // ── Sharing ───────────────────────────────────────────────────────────────
+
     private void shareToWhatsApp(File audioFile) {
-        Uri audioUri = FileProvider.getUriForFile(
-            this,
-            getPackageName() + ".fileprovider",
-            audioFile
-        );
+        String mimeType = audioFile.getName().endsWith(".mp3") ? "audio/mpeg" : "audio/ogg";
+        Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", audioFile);
 
-        // Try WhatsApp personal first, then Business
-        String[] whatsappPackages = {"com.whatsapp", "com.whatsapp.w4b"};
-        boolean launched = false;
-
-        for (String pkg : whatsappPackages) {
+        String[] packages = {"com.whatsapp", "com.whatsapp.w4b"};
+        for (String pkg : packages) {
             try {
                 getPackageManager().getPackageInfo(pkg, 0);
                 Intent intent = new Intent(Intent.ACTION_SEND);
-                intent.setType("audio/ogg");
-                intent.putExtra(Intent.EXTRA_STREAM, audioUri);
+                intent.setType(mimeType);
+                intent.putExtra(Intent.EXTRA_STREAM, uri);
                 intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                intent.setComponent(new ComponentName(pkg, pkg + ".ShareToWhatsAppActivity"));
-                // Fallback component if above not found
-                try {
-                    startActivity(intent);
-                } catch (Exception ex) {
-                    intent.setComponent(null);
-                    intent.setPackage(pkg);
-                    startActivity(intent);
-                }
-                launched = true;
-                break;
-            } catch (PackageManager.NameNotFoundException ignored) {
-                // Try next package
-            }
+                intent.setPackage(pkg);
+                startActivity(intent);
+                return;
+            } catch (PackageManager.NameNotFoundException ignored) {}
         }
-
-        if (!launched) {
-            showToast("WhatsApp not installed — sharing to other apps instead");
-            shareToAnyApp(audioFile);
-        }
+        showToast("WhatsApp not found — sharing to other apps");
+        shareToAnyApp(audioFile);
     }
 
     private void shareToAnyApp(File audioFile) {
-        Uri audioUri = FileProvider.getUriForFile(
-            this,
-            getPackageName() + ".fileprovider",
-            audioFile
-        );
-
+        String mimeType = audioFile.getName().endsWith(".mp3") ? "audio/mpeg" : "audio/ogg";
+        Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", audioFile);
         Intent intent = new Intent(Intent.ACTION_SEND);
-        intent.setType("audio/ogg");
-        intent.putExtra(Intent.EXTRA_STREAM, audioUri);
+        intent.setType(mimeType);
+        intent.putExtra(Intent.EXTRA_STREAM, uri);
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        // Also allow WhatsApp to see the file
-        intent.setClipData(ClipData.newRawUri("", audioUri));
-
+        intent.setClipData(ClipData.newRawUri("", uri));
         startActivity(Intent.createChooser(intent, "Share voice note via..."));
     }
 
-    private void playAudioFile(File audioFile) {
+    private void playAudioFile(File f) {
         try {
             android.media.MediaPlayer mp = new android.media.MediaPlayer();
-            mp.setDataSource(audioFile.getAbsolutePath());
+            mp.setDataSource(f.getAbsolutePath());
             mp.prepare();
             mp.start();
             showToast("Playing preview...");
-            mp.setOnCompletionListener(player -> player.release());
+            mp.setOnCompletionListener(p -> p.release());
         } catch (Exception e) {
-            showToast("Could not play audio: " + e.getMessage());
+            showErrorDialog("Playback Error", e.getMessage());
         }
+    }
+
+    // ── Setup dialogs ─────────────────────────────────────────────────────────
+
+    private void showProviderSetupDialog() {
+        new AlertDialog.Builder(this)
+            .setTitle("Choose TTS Provider")
+            .setMessage("Which service do you want to use for voice generation?")
+            .setPositiveButton("ElevenLabs (SA voices ✓)", (d, w) -> {
+                prefs.setProvider(PrefsHelper.PROVIDER_ELEVENLABS);
+                showElevenLabsSetup();
+            })
+            .setNegativeButton("Google Cloud", (d, w) -> {
+                prefs.setProvider(PrefsHelper.PROVIDER_GOOGLE);
+                showApiKeyDialog();
+            })
+            .setCancelable(false)
+            .show();
+    }
+
+    private void showElevenLabsSetup() {
+        android.widget.EditText et = new android.widget.EditText(this);
+        et.setHint("sk_...");
+        et.setText(prefs.getElevenLabsApiKey());
+        et.setInputType(android.text.InputType.TYPE_CLASS_TEXT |
+            android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+        int pad = (int)(16 * getResources().getDisplayMetrics().density);
+        et.setPadding(pad, pad, pad, pad);
+
+        new AlertDialog.Builder(this)
+            .setTitle("ElevenLabs API Key")
+            .setMessage("Sign up free at elevenlabs.io\nProfile → API Keys → Copy key\n\nFree tier: 10,000 chars/month")
+            .setView(et)
+            .setPositiveButton("Save & Pick Voice", (d, w) -> {
+                String key = et.getText().toString().trim();
+                if (!key.isEmpty()) {
+                    prefs.setElevenLabsApiKey(key);
+                    pickElevenLabsVoice();
+                }
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
     }
 
     private void showApiKeyDialog() {
-        View dialogView = getLayoutInflater().inflate(R.layout.dialog_api_key, null);
-        android.widget.EditText etKey = dialogView.findViewById(R.id.et_api_key);
-        etKey.setText(prefs.getApiKey());
+        android.widget.EditText et = new android.widget.EditText(this);
+        et.setHint("AIza...");
+        et.setText(prefs.getGoogleApiKey());
+        et.setInputType(android.text.InputType.TYPE_CLASS_TEXT |
+            android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+        int pad = (int)(16 * getResources().getDisplayMetrics().density);
+        et.setPadding(pad, pad, pad, pad);
 
         new AlertDialog.Builder(this)
             .setTitle("Google Cloud API Key")
-            .setMessage("Enter your Google Cloud TTS API key.\n\nGet it free at:\nconsole.cloud.google.com → APIs & Services → Credentials")
-            .setView(dialogView)
+            .setMessage("console.cloud.google.com → APIs & Services → Credentials → API key")
+            .setView(et)
             .setPositiveButton("Save", (d, w) -> {
-                String key = etKey.getText().toString().trim();
-                if (!key.isEmpty()) {
-                    prefs.setApiKey(key);
-                    showToast("API key saved ✓");
-                }
-            })
-            .setNeutralButton("Settings", (d, w) -> openSettings())
-            .setNegativeButton("Cancel", null)
-            .show();
-    }
-
-    private void pickVoice() {
-        String apiKey = prefs.getApiKey();
-        if (apiKey.isEmpty()) {
-            showApiKeyDialog();
-            return;
-        }
-
-        setUiLoading(true);
-        binding.tvStatus.setText("Fetching available voices...");
-        binding.tvStatus.setVisibility(View.VISIBLE);
-
-        executor.execute(() -> {
-            try {
-                List<GoogleTtsClient.VoiceInfo> voices = ttsClient.fetchAvailableVoices(apiKey);
-                mainHandler.post(() -> {
-                    setUiLoading(false);
-                    if (voices.isEmpty()) {
-                        showErrorDialog("No Voices Found",
-                            "No English female voices were found in your Google Cloud project.\n\n" +
-                            "Make sure:\n• The Cloud Text-to-Speech API is enabled\n• Billing is linked to your project");
-                        return;
-                    }
-                    showVoicePickerDialog(voices);
-                });
-            } catch (Exception e) {
-                mainHandler.post(() -> {
-                    setUiLoading(false);
-                    showErrorDialog("Could Not Fetch Voices", e.getMessage());
-                });
-            }
-        });
-    }
-
-    private void showVoicePickerDialog(List<GoogleTtsClient.VoiceInfo> voices) {
-        String currentVoice = prefs.getVoiceName();
-
-        String[] labels = new String[voices.size()];
-        int selectedIndex = 0;
-        for (int i = 0; i < voices.size(); i++) {
-            labels[i] = voices.get(i).label();
-            if (voices.get(i).name.equals(currentVoice)) selectedIndex = i;
-        }
-
-        final int[] chosen = {selectedIndex};
-
-        new AlertDialog.Builder(this)
-            .setTitle("Choose Voice")
-            .setSingleChoiceItems(labels, selectedIndex, (d, which) -> chosen[0] = which)
-            .setPositiveButton("Select", (d, w) -> {
-                GoogleTtsClient.VoiceInfo picked = voices.get(chosen[0]);
-                prefs.setVoiceName(picked.name);
-                // Update footer text
-                binding.tvVoiceInfo.setText("Voice: " + picked.label());
-                showToast("Voice set to: " + picked.label());
+                String key = et.getText().toString().trim();
+                if (!key.isEmpty()) { prefs.setGoogleApiKey(key); showToast("API key saved ✓"); }
             })
             .setNegativeButton("Cancel", null)
             .show();
     }
 
-    private void openSettings() {
-        startActivity(new Intent(this, SettingsActivity.class));
+    // ── UI helpers ────────────────────────────────────────────────────────────
+
+    private void updateVoiceInfoLabel() {
+        String label;
+        if (prefs.isElevenLabs()) {
+            String name = prefs.getElevenLabsVoiceName();
+            label = name.isEmpty()
+                ? "ElevenLabs — tap Pick Voice to choose"
+                : "ElevenLabs: " + name;
+        } else {
+            String name = prefs.getGoogleVoiceName();
+            label = name.isEmpty()
+                ? "Google TTS — tap Pick Voice to choose"
+                : "Google: " + name;
+        }
+        binding.tvVoiceInfo.setText(label);
     }
 
-    private void setUiLoading(boolean loading) {
+    private void setUiLoading(boolean loading, String statusMsg) {
         binding.progressBar.setVisibility(loading ? View.VISIBLE : View.GONE);
         binding.btnSendWhatsApp.setEnabled(!loading);
         binding.btnShareOther.setEnabled(!loading);
         binding.btnPreview.setEnabled(!loading);
+        binding.btnPickVoice.setEnabled(!loading);
         binding.etMessage.setEnabled(!loading);
-        if (loading) {
-            binding.tvStatus.setText("Generating South African voice...");
+        if (loading && statusMsg != null) {
+            binding.tvStatus.setText(statusMsg);
             binding.tvStatus.setVisibility(View.VISIBLE);
         } else {
             binding.tvStatus.setVisibility(View.GONE);
@@ -352,10 +378,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void showErrorDialog(String title, String message) {
         new AlertDialog.Builder(this)
-            .setTitle(title)
-            .setMessage(message)
-            .setPositiveButton("OK", null)
-            .show();
+            .setTitle(title).setMessage(message).setPositiveButton("OK", null).show();
     }
 
     private void showToast(String msg) {
@@ -371,10 +394,16 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == R.id.action_settings) {
-            openSettings();
+            startActivity(new Intent(this, SettingsActivity.class));
             return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        updateVoiceInfoLabel();
     }
 
     @Override

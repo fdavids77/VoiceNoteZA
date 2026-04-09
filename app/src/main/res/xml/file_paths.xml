@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <!--
-        Expose the app's cache/voice_notes/ directory to WhatsApp via FileProvider.
-        This is where GoogleTtsClient saves the generated OGG file.
+        Expose the app's cache/voice_notes/ directory via FileProvider.
+        Contains both .ogg (Google TTS) and .mp3 (ElevenLabs) output files.
     -->
     <cache-path
         name="voice_notes"

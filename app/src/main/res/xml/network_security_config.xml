@@ -4,5 +4,13 @@
         <!-- Only allow HTTPS traffic to Google Cloud TTS -->
         <domain includeSubdomains="true">texttospeech.googleapis.com</domain>
     </domain-config>
+    <!--
+        Permit plain HTTP to the default Chatterbox LAN host only.
+        If you change the Chatterbox host in Settings, add another domain entry here
+        (or extend this one) — the app-level default usesCleartextTraffic is still false.
+    -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">192.168.0.85</domain>
+    </domain-config>
     <base-config cleartextTrafficPermitted="false" />
 </network-security-config>

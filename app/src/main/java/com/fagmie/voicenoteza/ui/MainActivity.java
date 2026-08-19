@@ -23,12 +23,18 @@ import androidx.core.content.FileProvider;
 
 import com.fagmie.voicenoteza.R;
 import com.fagmie.voicenoteza.databinding.ActivityMainBinding;
+import com.fagmie.voicenoteza.tts.ChatterboxClient;
 import com.fagmie.voicenoteza.tts.ElevenLabsClient;
 import com.fagmie.voicenoteza.tts.GoogleTtsClient;
 import com.fagmie.voicenoteza.util.PrefsHelper;
 
+import android.database.Cursor;
+import android.provider.OpenableColumns;
+
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
@@ -43,12 +49,15 @@ public class MainActivity extends AppCompatActivity {
     private Handler mainHandler;
     private GoogleTtsClient googleClient;
     private ElevenLabsClient elevenLabsClient;
+    private ChatterboxClient chatterboxClient;
     private PrefsHelper prefs;
 
     private static final int MAX_CHARS = 1000;
 
-    // Launcher for picking an MP3 file from Downloads
     private ActivityResultLauncher<String[]> mp3PickerLauncher;
+    private ActivityResultLauncher<String[]> voicePickerLauncher;
+    private String pendingVoiceName;
+    private String pendingTranscript;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,11 +66,15 @@ public class MainActivity extends AppCompatActivity {
         setContentView(binding.getRoot());
         setSupportActionBar(binding.toolbar);
 
-        executor         = Executors.newSingleThreadExecutor();
-        mainHandler      = new Handler(Looper.getMainLooper());
-        prefs            = new PrefsHelper(this);
-        googleClient     = new GoogleTtsClient(this);
-        elevenLabsClient = new ElevenLabsClient(this);
+        executor          = Executors.newSingleThreadExecutor();
+        mainHandler       = new Handler(Looper.getMainLooper());
+        prefs             = new PrefsHelper(this);
+        googleClient      = new GoogleTtsClient(this);
+        elevenLabsClient  = new ElevenLabsClient(this);
+        chatterboxClient  = new ChatterboxClient(this);
+
+        // Chatterbox is the only generative TTS source in this build
+        prefs.setProvider(PrefsHelper.PROVIDER_CHATTERBOX);
 
         // Register MP3 file picker — must be done before onStart
         mp3PickerLauncher = registerForActivityResult(
@@ -71,13 +84,17 @@ public class MainActivity extends AppCompatActivity {
             }
         );
 
+        // Register voice reference file picker
+        voicePickerLauncher = registerForActivityResult(
+            new ActivityResultContracts.OpenDocument(),
+            uri -> {
+                if (uri != null) handleVoiceFileSelected(uri);
+            }
+        );
+
         setupCharCounter();
         setupButtons();
         updateVoiceInfoLabel();
-
-        if (!prefs.isFullyConfigured()) {
-            showProviderSetupDialog();
-        }
     }
 
     private void setupCharCounter() {
@@ -171,6 +188,8 @@ public class MainActivity extends AppCompatActivity {
     private void pickVoice() {
         if (prefs.isElevenLabs()) {
             pickElevenLabsVoice();
+        } else if (prefs.isChatterbox()) {
+            showVoiceManagerDialog();
         } else {
             pickGoogleVoice();
         }
@@ -264,6 +283,201 @@ public class MainActivity extends AppCompatActivity {
             .show();
     }
 
+    // ── Chatterbox voice management ───────────────────────────────────────────
+
+    private void showVoiceManagerDialog() {
+        setUiLoading(true, "Loading voices…");
+        executor.execute(() -> {
+            try {
+                List<ChatterboxClient.VoiceInfo> voices = chatterboxClient.fetchVoices(prefs.getChatterboxHost());
+                mainHandler.post(() -> {
+                    setUiLoading(false, null);
+                    buildVoicePickerDialog(voices);
+                });
+            } catch (Exception e) {
+                mainHandler.post(() -> {
+                    setUiLoading(false, null);
+                    showErrorDialog("Voice List Error", e.getMessage());
+                });
+            }
+        });
+    }
+
+    private void buildVoicePickerDialog(List<ChatterboxClient.VoiceInfo> voices) {
+        String current = prefs.getChatterboxVoice();
+        // Strip .wav from stored value for comparison (handles old prefs)
+        if (current.endsWith(".wav")) current = current.substring(0, current.length() - 4);
+        final String currentName = current;
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this)
+            .setTitle("Reference Voices");
+
+        if (voices.isEmpty()) {
+            builder.setMessage("No voices on server yet. Add one to get started.");
+            builder.setPositiveButton("Add Voice", (d, w) -> promptAddVoiceName());
+            builder.setNegativeButton("Cancel", null);
+        } else {
+            String[] items = new String[voices.size()];
+            int initialSel = 0;
+            for (int i = 0; i < voices.size(); i++) {
+                ChatterboxClient.VoiceInfo v = voices.get(i);
+                items[i] = v.hasTranscript ? v.name : v.name + "  (no transcript)";
+                if (v.name.equals(currentName)) initialSel = i;
+            }
+            final int[] chosen = {initialSel};
+
+            builder.setSingleChoiceItems(items, initialSel, (d, which) -> chosen[0] = which);
+            builder.setPositiveButton("Use Selected", (d, w) -> {
+                ChatterboxClient.VoiceInfo picked = voices.get(chosen[0]);
+                prefs.setChatterboxVoice(picked.name);
+                updateVoiceInfoLabel();
+                showToast("Voice: " + picked.name);
+            });
+            builder.setNeutralButton("Add Voice", (d, w) -> promptAddVoiceName());
+            builder.setNegativeButton("Delete", (d, w) -> confirmDeleteVoice(voices.get(chosen[0]).name));
+        }
+
+        builder.show();
+    }
+
+    private void promptAddVoiceName() {
+        int pad = (int)(16 * getResources().getDisplayMetrics().density);
+
+        android.widget.LinearLayout layout = new android.widget.LinearLayout(this);
+        layout.setOrientation(android.widget.LinearLayout.VERTICAL);
+        layout.setPadding(pad, pad / 2, pad, 0);
+
+        android.widget.EditText etName = new android.widget.EditText(this);
+        etName.setHint("e.g. myvoice");
+        etName.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
+        layout.addView(etName);
+
+        android.widget.TextView tvLabel = new android.widget.TextView(this);
+        tvLabel.setText("Reference transcript");
+        tvLabel.setPadding(0, pad, 0, 0);
+        layout.addView(tvLabel);
+
+        android.widget.EditText etTranscript = new android.widget.EditText(this);
+        etTranscript.setHint("Type the exact words spoken in your recording — this is required for cloning quality.");
+        etTranscript.setInputType(
+            android.text.InputType.TYPE_CLASS_TEXT |
+            android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        etTranscript.setMinLines(3);
+        etTranscript.setGravity(android.view.Gravity.TOP | android.view.Gravity.START);
+        layout.addView(etTranscript);
+
+        new AlertDialog.Builder(this)
+            .setTitle("Add Reference Voice")
+            .setMessage("Short name (letters, digits). You'll pick the audio file next.")
+            .setView(layout)
+            .setPositiveButton("Choose File", (d, w) -> {
+                String name = etName.getText().toString().trim();
+                String transcript = etTranscript.getText().toString().trim();
+                if (name.isEmpty()) { showToast("Name cannot be empty"); return; }
+                if (transcript.isEmpty()) {
+                    showToast("Transcript is required for cloning quality");
+                    return;
+                }
+                pendingVoiceName = name;
+                pendingTranscript = transcript;
+                voicePickerLauncher.launch(new String[]{"audio/*", "video/mp4", "video/mp4v-es"});
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
+    private void handleVoiceFileSelected(Uri uri) {
+        if (pendingVoiceName == null || pendingVoiceName.isEmpty()) {
+            showErrorDialog("Error", "No voice name set before picking file.");
+            return;
+        }
+        if (pendingTranscript == null || pendingTranscript.isEmpty()) {
+            showErrorDialog("Error", "No transcript set before picking file.");
+            return;
+        }
+        String voiceName = pendingVoiceName;
+        String transcript = pendingTranscript;
+        pendingVoiceName = null;
+        pendingTranscript = null;
+
+        setUiLoading(true, "Uploading voice…");
+        executor.execute(() -> {
+            try {
+                // Read all bytes from the content URI
+                byte[] bytes;
+                try (InputStream in = getContentResolver().openInputStream(uri)) {
+                    if (in == null) throw new IOException("Could not open selected file");
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    byte[] buf = new byte[8192];
+                    int len;
+                    while ((len = in.read(buf)) != -1) baos.write(buf, 0, len);
+                    bytes = baos.toByteArray();
+                }
+
+                String mimeType = getContentResolver().getType(uri);
+                if (mimeType == null) mimeType = "audio/mpeg";
+
+                // Get display name for multipart filename field
+                String originalFilename = voiceName + ".audio";
+                try (Cursor c = getContentResolver().query(uri, null, null, null, null)) {
+                    if (c != null && c.moveToFirst()) {
+                        int idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                        if (idx >= 0) originalFilename = c.getString(idx);
+                    }
+                }
+
+                String savedName = chatterboxClient.uploadVoice(
+                    prefs.getChatterboxHost(), voiceName, bytes, mimeType, originalFilename,
+                    transcript);
+
+                mainHandler.post(() -> {
+                    setUiLoading(false, null);
+                    prefs.setChatterboxVoice(savedName);
+                    updateVoiceInfoLabel();
+                    showToast("Voice '" + savedName + "' added and selected");
+                    showVoiceManagerDialog();
+                });
+            } catch (Exception e) {
+                mainHandler.post(() -> {
+                    setUiLoading(false, null);
+                    showErrorDialog("Upload Failed", e.getMessage());
+                });
+            }
+        });
+    }
+
+    private void confirmDeleteVoice(String name) {
+        new AlertDialog.Builder(this)
+            .setTitle("Delete Voice")
+            .setMessage("Delete '" + name + "' from the server?\nThis cannot be undone.")
+            .setPositiveButton("Delete", (d, w) -> {
+                setUiLoading(true, "Deleting voice…");
+                executor.execute(() -> {
+                    try {
+                        chatterboxClient.deleteVoice(prefs.getChatterboxHost(), name);
+                        String stored = prefs.getChatterboxVoice();
+                        if (stored.endsWith(".wav")) stored = stored.substring(0, stored.length() - 4);
+                        if (name.equals(stored)) {
+                            prefs.setChatterboxVoice("myvoice");
+                        }
+                        mainHandler.post(() -> {
+                            setUiLoading(false, null);
+                            updateVoiceInfoLabel();
+                            showToast("Voice deleted");
+                            showVoiceManagerDialog();
+                        });
+                    } catch (Exception e) {
+                        mainHandler.post(() -> {
+                            setUiLoading(false, null);
+                            showErrorDialog("Delete Failed", e.getMessage());
+                        });
+                    }
+                });
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
     // ── Audio generation ──────────────────────────────────────────────────────
 
     private void generateAndShare(boolean whatsAppDirect) {
@@ -274,9 +488,14 @@ public class MainActivity extends AppCompatActivity {
         setUiLoading(true, "Generating voice...");
         executor.execute(() -> {
             try {
-                File audioFile = prefs.isElevenLabs()
-                    ? elevenLabsClient.synthesize(text, prefs.getElevenLabsApiKey(), prefs.getElevenLabsVoiceId())
-                    : googleClient.synthesize(text, prefs.getGoogleApiKey());
+                File audioFile;
+                if (prefs.isElevenLabs()) {
+                    audioFile = elevenLabsClient.synthesize(text, prefs.getElevenLabsApiKey(), prefs.getElevenLabsVoiceId());
+                } else if (prefs.isChatterbox()) {
+                    audioFile = chatterboxClient.synthesize(text, prefs.getChatterboxHost(), prefs.getChatterboxVoice());
+                } else {
+                    audioFile = googleClient.synthesize(text, prefs.getGoogleApiKey());
+                }
 
                 mainHandler.post(() -> {
                     setUiLoading(false, null);
@@ -299,9 +518,14 @@ public class MainActivity extends AppCompatActivity {
         setUiLoading(true, "Generating preview...");
         executor.execute(() -> {
             try {
-                File audioFile = prefs.isElevenLabs()
-                    ? elevenLabsClient.synthesize(text, prefs.getElevenLabsApiKey(), prefs.getElevenLabsVoiceId())
-                    : googleClient.synthesize(text, prefs.getGoogleApiKey());
+                File audioFile;
+                if (prefs.isElevenLabs()) {
+                    audioFile = elevenLabsClient.synthesize(text, prefs.getElevenLabsApiKey(), prefs.getElevenLabsVoiceId());
+                } else if (prefs.isChatterbox()) {
+                    audioFile = chatterboxClient.synthesize(text, prefs.getChatterboxHost(), prefs.getChatterboxVoice());
+                } else {
+                    audioFile = googleClient.synthesize(text, prefs.getGoogleApiKey());
+                }
                 mainHandler.post(() -> { setUiLoading(false, null); playAudioFile(audioFile); });
             } catch (Exception e) {
                 mainHandler.post(() -> { setUiLoading(false, null); showErrorDialog("Preview Error", e.getMessage()); });
@@ -462,16 +686,29 @@ public class MainActivity extends AppCompatActivity {
     // ── Setup dialogs ─────────────────────────────────────────────────────────
 
     private void showProviderSetupDialog() {
+        String[] providers = {
+            "ElevenLabs (SA voices ✓)",
+            "Chatterbox (self-hosted, no API key)",
+            "Google Cloud TTS"
+        };
         new AlertDialog.Builder(this)
             .setTitle("Choose TTS Provider")
-            .setMessage("Which service do you want to use for voice generation?")
-            .setPositiveButton("ElevenLabs (SA voices ✓)", (d, w) -> {
-                prefs.setProvider(PrefsHelper.PROVIDER_ELEVENLABS);
-                showElevenLabsSetup();
-            })
-            .setNegativeButton("Google Cloud", (d, w) -> {
-                prefs.setProvider(PrefsHelper.PROVIDER_GOOGLE);
-                showApiKeyDialog();
+            .setItems(providers, (d, which) -> {
+                switch (which) {
+                    case 0:
+                        prefs.setProvider(PrefsHelper.PROVIDER_ELEVENLABS);
+                        showElevenLabsSetup();
+                        break;
+                    case 1:
+                        prefs.setProvider(PrefsHelper.PROVIDER_CHATTERBOX);
+                        updateVoiceInfoLabel();
+                        showToast("Chatterbox ready — host/voice editable in Settings");
+                        break;
+                    case 2:
+                        prefs.setProvider(PrefsHelper.PROVIDER_GOOGLE);
+                        showApiKeyDialog();
+                        break;
+                }
             })
             .setCancelable(false)
             .show();
@@ -531,6 +768,8 @@ public class MainActivity extends AppCompatActivity {
             label = name.isEmpty()
                 ? "ElevenLabs — tap Pick Voice to choose"
                 : "ElevenLabs: " + name;
+        } else if (prefs.isChatterbox()) {
+            label = prefs.getChatterboxVoice() + " · " + prefs.getChatterboxHost();
         } else {
             String name = prefs.getGoogleVoiceName();
             label = name.isEmpty()
@@ -541,18 +780,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setUiLoading(boolean loading, String statusMsg) {
-        binding.progressBar.setVisibility(loading ? View.VISIBLE : View.GONE);
+        binding.layoutProgress.setVisibility(loading ? View.VISIBLE : View.GONE);
+        if (loading && statusMsg != null) {
+            binding.tvStatus.setText(statusMsg);
+        }
         binding.btnSendWhatsApp.setEnabled(!loading);
         binding.btnShareOther.setEnabled(!loading);
         binding.btnPreview.setEnabled(!loading);
         binding.btnPickVoice.setEnabled(!loading);
         binding.etMessage.setEnabled(!loading);
-        if (loading && statusMsg != null) {
-            binding.tvStatus.setText(statusMsg);
-            binding.tvStatus.setVisibility(View.VISIBLE);
-        } else {
-            binding.tvStatus.setVisibility(View.GONE);
-        }
     }
 
     private void showErrorDialog(String title, String message) {

@@ -82,6 +82,28 @@ public class SettingsActivity extends AppCompatActivity {
                     return "****";
                 });
             }
+
+            // Self-hosted engine summary (ListPreference: show selected engine label + host)
+            ListPreference chatterboxHostPref = findPreference("chatterbox_host");
+            if (chatterboxHostPref != null) {
+                chatterboxHostPref.setSummaryProvider(preference -> {
+                    CharSequence label = chatterboxHostPref.getEntry();
+                    String host = chatterboxHostPref.getValue();
+                    if (host == null || host.isEmpty()) return "Not set — using default 192.168.0.85:8006";
+                    return label != null ? label + " · " + host : host;
+                });
+            }
+
+            // Chatterbox voice summary
+            EditTextPreference chatterboxVoicePref = findPreference("chatterbox_voice");
+            if (chatterboxVoicePref != null) {
+                chatterboxVoicePref.setSummaryProvider(preference -> {
+                    String voice = getPreferenceManager()
+                        .getSharedPreferences()
+                        .getString("chatterbox_voice", "myvoice.wav");
+                    return voice.isEmpty() ? "Not set — using default myvoice.wav" : voice;
+                });
+            }
         }
     }
 }

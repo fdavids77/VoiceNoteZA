@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+voices/
+exports/
+hf_cache/
+*.ogg
+*.wav

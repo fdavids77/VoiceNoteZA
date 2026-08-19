@@ -1,0 +1,31 @@
+# Pocket TTS wrapper for the VoiceNoteZA pipeline.
+# Runs alongside your existing services on a new port (8007).
+#
+# Voice cloning is GATED. To enable cloning your own voice:
+#   1. Accept terms at https://huggingface.co/kyutai/pocket-tts
+#   2. Create an HF token (read scope) and put it in a .env file beside this:
+#        HF_TOKEN=hf_xxxxxxxxxxxxxxxxxxxx
+#   3. docker compose -f docker-compose.pockettts.yml up -d --build
+# Premade catalog voices work WITHOUT a token.
+
+services:
+  pockettts:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: voicenote-pockettts:latest
+    container_name: pockettts-wrapper
+    ports:
+      - "8007:8007"
+    environment:
+      - POCKET_LANGUAGE=${POCKET_LANGUAGE:-english}
+      - POCKET_THREADS=${POCKET_THREADS:-4}
+      - POCKET_DAEMON=1
+      - POCKET_OPUS_BITRATE=${POCKET_OPUS_BITRATE:-32k}
+      - HF_TOKEN=${HF_TOKEN:-}
+    volumes:
+      - pockettts_data:/data
+    restart: unless-stopped
+
+volumes:
+  pockettts_data:

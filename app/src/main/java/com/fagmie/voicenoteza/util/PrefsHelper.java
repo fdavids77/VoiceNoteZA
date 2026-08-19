@@ -6,7 +6,7 @@ import androidx.preference.PreferenceManager;
 
 /**
  * PrefsHelper — centralised access to all user preferences.
- * Supports both Google Cloud TTS and ElevenLabs providers.
+ * Supports Google Cloud TTS, ElevenLabs, and self-hosted Chatterbox providers.
  */
 public class PrefsHelper {
 
@@ -15,8 +15,9 @@ public class PrefsHelper {
     public static final float DEFAULT_RATE  = 1.0f;
     public static final float DEFAULT_PITCH = 0.0f;
 
-    public static final String PROVIDER_GOOGLE     = "google";
-    public static final String PROVIDER_ELEVENLABS = "elevenlabs";
+    public static final String PROVIDER_GOOGLE      = "google";
+    public static final String PROVIDER_ELEVENLABS  = "elevenlabs";
+    public static final String PROVIDER_CHATTERBOX  = "chatterbox";
 
     public PrefsHelper(Context context) {
         this.prefs = PreferenceManager.getDefaultSharedPreferences(context);
@@ -25,7 +26,8 @@ public class PrefsHelper {
     // Provider
     public String getProvider() { return prefs.getString("tts_provider", PROVIDER_ELEVENLABS); }
     public void setProvider(String p) { prefs.edit().putString("tts_provider", p).apply(); }
-    public boolean isElevenLabs() { return PROVIDER_ELEVENLABS.equals(getProvider()); }
+    public boolean isElevenLabs()  { return PROVIDER_ELEVENLABS.equals(getProvider()); }
+    public boolean isChatterbox()  { return PROVIDER_CHATTERBOX.equals(getProvider()); }
 
     // Google
     public String getGoogleApiKey() { return prefs.getString("google_api_key", "").trim(); }
@@ -41,10 +43,17 @@ public class PrefsHelper {
     public String getElevenLabsVoiceName() { return prefs.getString("elevenlabs_voice_name", ""); }
     public void setElevenLabsVoiceName(String n) { prefs.edit().putString("elevenlabs_voice_name", n).apply(); }
 
+    // Chatterbox
+    public String getChatterboxHost()    { return prefs.getString("chatterbox_host", "192.168.0.85:8006"); }
+    public void setChatterboxHost(String h) { prefs.edit().putString("chatterbox_host", h.trim()).apply(); }
+    public String getChatterboxVoice()   { return prefs.getString("chatterbox_voice", "myvoice"); }
+    public void setChatterboxVoice(String v) { prefs.edit().putString("chatterbox_voice", v.trim()).apply(); }
+
     // Generic
     public String getActiveApiKey() { return isElevenLabs() ? getElevenLabsApiKey() : getGoogleApiKey(); }
     public boolean isFullyConfigured() {
-        if (isElevenLabs()) return !getElevenLabsApiKey().isEmpty() && !getElevenLabsVoiceId().isEmpty();
+        if (isElevenLabs())  return !getElevenLabsApiKey().isEmpty() && !getElevenLabsVoiceId().isEmpty();
+        if (isChatterbox())  return true; // no API key; host and voice have defaults
         return !getGoogleApiKey().isEmpty() && !getGoogleVoiceName().isEmpty();
     }
 

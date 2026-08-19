@@ -51,6 +51,32 @@
 
     </PreferenceCategory>
 
+    <!-- Self-hosted TTS engines (NeuTTS / Chatterbox / Pocket, shared /voicenote surface) -->
+    <PreferenceCategory
+        app:title="Self-Hosted Engine"
+        app:iconSpaceReserved="false">
+
+        <ListPreference
+            app:key="chatterbox_host"
+            app:title="Engine (Host:Port)"
+            app:dialogTitle="Self-Hosted TTS Engine"
+            app:entries="@array/tts_engine_labels"
+            app:entryValues="@array/tts_engine_values"
+            app:defaultValue="192.168.0.85:8006"
+            app:useSimpleSummaryProvider="true"
+            app:iconSpaceReserved="false" />
+
+        <EditTextPreference
+            app:key="chatterbox_voice"
+            app:title="Reference Voice Name"
+            app:dialogTitle="Reference Voice Name"
+            app:dialogMessage="Name of the voice on the server (e.g. myvoice — no extension)"
+            app:defaultValue="myvoice"
+            app:useSimpleSummaryProvider="true"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
     <!-- About -->
     <PreferenceCategory
         app:title="About"

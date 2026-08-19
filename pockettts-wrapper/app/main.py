@@ -216,21 +216,37 @@ async def add_reference(file: UploadFile = File(...), name: str = Form(None),
     if p.returncode != 0:
         raise HTTPException(400, f"Could not decode reference: {p.stderr.decode('utf-8','ignore')[:200]}")
 
-    # Export a safetensors state via the worker (isolated, hard-exit safe)
-    req = json.dumps({"voice_src": str(wav_path), "text": "warmup.",
-                      "language": LANGUAGE, "export_to": str(EXPORTS_DIR / f"{voice_name}.safetensors")})
-    with tempfile.TemporaryDirectory() as td:
-        out = os.path.join(td, "w.wav")
-        pr = subprocess.run([sys.executable, WORKER, req, out],
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=GEN_TIMEOUT)
-        if not os.path.exists(out + ".ok"):
-            err = pr.stderr.decode("utf-8", "ignore")
-            wav_path.unlink(missing_ok=True)
-            if "voice cloning" in err.lower() or "could not download" in err.lower():
-                _cloning_ok = False
-                raise HTTPException(403, "Voice cloning weights are gated. Accept terms at "
-                                         "https://huggingface.co/kyutai/pocket-tts and set HF_TOKEN.")
-            raise HTTPException(500, f"Cloning failed: {err[:400]}")
+    # Encode the reference + export a safetensors state.
+    # Prefer the persistent daemon: it already holds the model in memory, so we
+    # avoid loading a SECOND ~430 MB copy in a one-shot worker (which thrashes /
+    # times out on memory-constrained hosts). One-shot worker is the fallback.
+    export_path = str(EXPORTS_DIR / f"{voice_name}.safetensors")
+    try:
+        if USE_DAEMON:
+            _daemon.generate(str(wav_path), "warmup.", export_to=export_path)
+        else:
+            req = json.dumps({"voice_src": str(wav_path), "text": "warmup.",
+                              "language": LANGUAGE, "export_to": export_path})
+            with tempfile.TemporaryDirectory() as td:
+                out = os.path.join(td, "w.wav")
+                pr = subprocess.run([sys.executable, WORKER, req, out],
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=GEN_TIMEOUT)
+                if not os.path.exists(out + ".ok"):
+                    err = pr.stderr.decode("utf-8", "ignore")
+                    if "voice cloning" in err.lower() or "could not download" in err.lower():
+                        _cloning_ok = False
+                        raise HTTPException(403, "Voice cloning weights are gated. Accept terms at "
+                                                 "https://huggingface.co/kyutai/pocket-tts and set HF_TOKEN.")
+                    raise HTTPException(500, f"Cloning failed: {err[:400]}")
+    except HTTPException:
+        wav_path.unlink(missing_ok=True)
+        raise
+    except subprocess.TimeoutExpired:
+        wav_path.unlink(missing_ok=True)
+        raise HTTPException(504, "Cloning timed out — reference too long or host under memory pressure.")
+    except Exception as e:  # noqa: BLE001
+        wav_path.unlink(missing_ok=True)
+        raise HTTPException(500, f"Cloning failed: {e}")
     _cloning_ok = True
     log.info("Cloned reference voice '%s'", voice_name)
     # `voice` mirrors `name` — the VoiceNoteZA client reads the `voice` key.

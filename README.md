@@ -9,7 +9,9 @@ Originally built for post-throat-surgery communication, VoiceNoteZA converts typ
 ## Features
 
 - 🇿🇦 **South African voices** — via ElevenLabs community voice library
-- 🤖 **Dual TTS provider** — ElevenLabs or Google Cloud TTS, switchable in-app
+- 🤖 **Three TTS backends** — ElevenLabs, Google Cloud TTS, or self-hosted engines, switchable in-app
+- 🏠 **Self-hosted TTS** — run your own CPU engines on the LAN (NeuTTS Air, Chatterbox, Pocket TTS) with no API key and no per-character cost
+- 🎭 **Voice cloning** — clone your own voice from a short reference clip (Pocket TTS / NeuTTS), no cloud upload
 - 📂 **Import MP3** — download from ElevenLabs website, import and send as WhatsApp voice note (free tier workaround)
 - 📱 **Multi-instance WhatsApp picker** — detects and targets original, Business, and clones 1–10
 - 🔊 **Preview before sending** — listen to the audio before it goes out
@@ -35,6 +37,12 @@ Originally built for post-throat-surgery communication, VoiceNoteZA converts typ
 3. Type your message → Generate → **Download MP3**
 4. Open VoiceNoteZA → tap **📂 Import ElevenLabs MP3 → WhatsApp**
 5. Select the downloaded MP3 → Preview or send directly
+
+### Option C — Self-hosted engine (no API key, LAN only 🏠)
+1. Run a wrapper on your LAN (see [Self-Hosted setup](#self-hosted-no-api-key-no-per-character-cost))
+2. In the app: **Settings → Self-Hosted Engine** → pick NeuTTS / Chatterbox / Pocket
+3. Choose a premade voice, or clone your own under **Manage Voices**
+4. Type your message → **Send to WhatsApp as Voice Note**
 
 ---
 
@@ -89,6 +97,39 @@ On first launch the app asks which TTS provider to use:
 | WaveNet | 1M chars/month | ⭐⭐⭐⭐ |
 | Standard | 4M chars/month | ⭐⭐⭐ |
 
+#### Self-Hosted (no API key, no per-character cost)
+
+Run one or more TTS engines on your own machine (e.g. a WSL2/Linux box on the LAN).
+All three share the same HTTP surface (`/health`, `/reference`, `/voicenote`), so the
+app talks to any of them with no code change — just pick the host:port.
+
+| Engine | Port | Notes |
+|--------|------|-------|
+| NeuTTS Air | 8006 | Cloning; paired transcript required |
+| Chatterbox | 8005 | Cloning |
+| **Pocket TTS** | **8007** | Kyutai; CPU-native, faster-than-realtime, **no paired transcript** for cloning |
+
+Each engine ships as a Docker wrapper. Pocket TTS lives in
+[`pockettts-wrapper/`](pockettts-wrapper/README.md):
+
+```bash
+cd pockettts-wrapper
+# premade voices only:
+docker compose -f docker-compose.pockettts.yml up -d --build
+# + voice cloning: accept terms at huggingface.co/kyutai/pocket-tts,
+#   then echo 'HF_TOKEN=hf_xxx' > .env  and rebuild
+```
+
+In the app: **Settings → Self-Hosted Engine** → pick NeuTTS / Chatterbox / Pocket, then
+choose a voice. The client posts JSON `{"text":…,"voice":…}` to `/voicenote` and gets
+back a WhatsApp-ready Opus/OGG voice note.
+
+> **LAN/HTTP note:** the self-hosted host is reached over plain HTTP, whitelisted per-host
+> in [`network_security_config.xml`](app/src/main/res/xml/network_security_config.xml).
+> The default host is `192.168.0.85` (port-agnostic) — change the domain entry there if
+> your server uses a different IP. Under WSL2 mirrored networking, only a Windows Firewall
+> inbound rule per port is needed (no portproxy).
+
 ---
 
 ## WhatsApp Multi-Instance Support
@@ -120,12 +161,18 @@ If only one instance is installed, it sends directly without showing the picker.
 app/src/main/java/com/fagmie/voicenoteza/
 ├── ui/
 │   ├── MainActivity.java        # Main screen — text input, share, import MP3
-│   └── SettingsActivity.java    # Settings — API key, voice, speed, pitch
+│   └── SettingsActivity.java    # Settings — API key, engine, voice, speed, pitch
 ├── tts/
 │   ├── GoogleTtsClient.java     # Google Cloud TTS API client
-│   └── ElevenLabsClient.java    # ElevenLabs TTS API client
+│   ├── ElevenLabsClient.java    # ElevenLabs TTS API client
+│   └── ChatterboxClient.java    # Self-hosted wrapper client (NeuTTS / Chatterbox / Pocket)
 └── util/
-    └── PrefsHelper.java         # SharedPreferences — supports both providers
+    └── PrefsHelper.java         # SharedPreferences — all three providers
+
+pockettts-wrapper/                # Pocket TTS (:8007) FastAPI + Docker wrapper
+├── app/main.py                   # /health /reference /voicenote (JSON + form)
+├── Dockerfile                    # CPU-only torch build
+└── docker-compose.pockettts.yml
 ```
 
 ---
@@ -159,14 +206,15 @@ keytool -genkey -v -keystore voicenoteza.jks \
 ## Requirements
 
 - Android 8.0+ (API 26)
-- Internet connection (for API-based TTS)
+- Internet connection for cloud TTS (Google/ElevenLabs) — **or** a self-hosted engine on the LAN (no internet needed for TTS)
 - WhatsApp installed (original, Business, or clone)
 
 ---
 
 ## Privacy
 
-- Typed text is sent to Google/ElevenLabs servers over HTTPS for audio generation
+- Cloud providers: typed text is sent to Google/ElevenLabs servers over HTTPS for audio generation
+- **Self-hosted engines: text and cloned voices never leave your LAN** — the app talks to your own server over plain HTTP (whitelisted per-host), nothing goes to a third party
 - API keys are stored locally on-device in SharedPreferences — never transmitted elsewhere
 - No analytics, no tracking, no ads
 
@@ -176,6 +224,8 @@ keytool -genkey -v -keystore voicenoteza.jks \
 
 - [ElevenLabs TTS API](https://elevenlabs.io/docs/api-reference)
 - [Google Cloud Text-to-Speech](https://cloud.google.com/text-to-speech)
+- [Kyutai Pocket TTS](https://huggingface.co/kyutai/pocket-tts) — self-hosted CPU engine (`:8007`)
+- [FastAPI](https://fastapi.tiangolo.com/) + [Docker](https://www.docker.com/) — self-hosted wrappers
 - [OkHttp](https://square.github.io/okhttp/)
 - [Gson](https://github.com/google/gson)
 - [Material Components for Android](https://material.io/develop/android)

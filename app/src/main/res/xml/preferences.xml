@@ -51,7 +51,7 @@
 
     </PreferenceCategory>
 
-    <!-- Self-hosted TTS engines (NeuTTS / Chatterbox / Pocket, shared /voicenote surface) -->
+    <!-- Self-hosted TTS engine — Pocket TTS (:8007) -->
     <PreferenceCategory
         app:title="Self-Hosted Engine"
         app:iconSpaceReserved="false">
@@ -62,7 +62,7 @@
             app:dialogTitle="Self-Hosted TTS Engine"
             app:entries="@array/tts_engine_labels"
             app:entryValues="@array/tts_engine_values"
-            app:defaultValue="192.168.0.85:8006"
+            app:defaultValue="192.168.0.85:8007"
             app:useSimpleSummaryProvider="true"
             app:iconSpaceReserved="false" />
 

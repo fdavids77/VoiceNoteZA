@@ -89,7 +89,7 @@ public class SettingsActivity extends AppCompatActivity {
                 chatterboxHostPref.setSummaryProvider(preference -> {
                     CharSequence label = chatterboxHostPref.getEntry();
                     String host = chatterboxHostPref.getValue();
-                    if (host == null || host.isEmpty()) return "Not set — using default 192.168.0.85:8006";
+                    if (host == null || host.isEmpty()) return "Not set — using default 192.168.0.85:8007";
                     return label != null ? label + " · " + host : host;
                 });
             }

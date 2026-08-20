@@ -10,8 +10,8 @@ Originally built for post-throat-surgery communication, VoiceNoteZA converts typ
 
 - 🇿🇦 **South African voices** — via ElevenLabs community voice library
 - 🤖 **Three TTS backends** — ElevenLabs, Google Cloud TTS, or self-hosted engines, switchable in-app
-- 🏠 **Self-hosted TTS** — run your own CPU engines on the LAN (NeuTTS Air, Chatterbox, Pocket TTS) with no API key and no per-character cost
-- 🎭 **Voice cloning** — clone your own voice from a short reference clip (Pocket TTS / NeuTTS), no cloud upload
+- 🏠 **Self-hosted TTS** — run your own CPU engine on the LAN (Pocket TTS) with no API key and no per-character cost
+- 🎭 **Voice cloning** — clone your own voice from a short reference clip (Pocket TTS), no cloud upload
 - 📂 **Import MP3** — download from ElevenLabs website, import and send as WhatsApp voice note (free tier workaround)
 - 📱 **Multi-instance WhatsApp picker** — detects and targets original, Business, and clones 1–10
 - 🔊 **Preview before sending** — listen to the audio before it goes out
@@ -40,7 +40,7 @@ Originally built for post-throat-surgery communication, VoiceNoteZA converts typ
 
 ### Option C — Self-hosted engine (no API key, LAN only 🏠)
 1. Run a wrapper on your LAN (see [Self-Hosted setup](#self-hosted-no-api-key-no-per-character-cost))
-2. In the app: **Settings → Self-Hosted Engine** → pick NeuTTS / Chatterbox / Pocket
+2. In the app: **Settings → Self-Hosted Engine → Pocket TTS**
 3. Choose a premade voice, or clone your own under **Manage Voices**
 4. Type your message → **Send to WhatsApp as Voice Note**
 
@@ -99,17 +99,20 @@ On first launch the app asks which TTS provider to use:
 
 #### Self-Hosted (no API key, no per-character cost)
 
-Run one or more TTS engines on your own machine (e.g. a WSL2/Linux box on the LAN).
-All three share the same HTTP surface (`/health`, `/reference`, `/voicenote`), so the
-app talks to any of them with no code change — just pick the host:port.
+Run a TTS engine on your own machine (e.g. a WSL2/Linux box on the LAN). It exposes an
+HTTP surface (`/health`, `/reference`, `/voicenote`), so the app talks to it with no
+per-request cost and nothing leaving the LAN.
 
 | Engine | Port | Notes |
 |--------|------|-------|
-| NeuTTS Air | 8006 | Cloning; paired transcript required |
-| Chatterbox | 8005 | Cloning |
 | **Pocket TTS** | **8007** | Kyutai; CPU-native, faster-than-realtime, **no paired transcript** for cloning |
 
-Each engine ships as a Docker wrapper. Pocket TTS lives in
+> Earlier builds also supported NeuTTS Air (:8006) and Chatterbox (:8005) on the same
+> surface, but both were too slow on CPU (~90 s/clip) and were dropped in favour of
+> Pocket TTS. The client contract is unchanged, so they can be re-added by listing their
+> host:port in `res/values/arrays.xml`.
+
+Pocket TTS ships as a Docker wrapper in
 [`pockettts-wrapper/`](pockettts-wrapper/README.md):
 
 ```bash
@@ -120,9 +123,9 @@ docker compose -f docker-compose.pockettts.yml up -d --build
 #   then echo 'HF_TOKEN=hf_xxx' > .env  and rebuild
 ```
 
-In the app: **Settings → Self-Hosted Engine** → pick NeuTTS / Chatterbox / Pocket, then
-choose a voice. The client posts JSON `{"text":…,"voice":…}` to `/voicenote` and gets
-back a WhatsApp-ready Opus/OGG voice note.
+In the app: **Settings → Self-Hosted Engine → Pocket TTS**, then choose a voice. The
+client posts JSON `{"text":…,"voice":…}` to `/voicenote` and gets back a WhatsApp-ready
+Opus/OGG voice note.
 
 > **LAN/HTTP note:** the self-hosted host is reached over plain HTTP, whitelisted per-host
 > in [`network_security_config.xml`](app/src/main/res/xml/network_security_config.xml).
@@ -165,7 +168,7 @@ app/src/main/java/com/fagmie/voicenoteza/
 ├── tts/
 │   ├── GoogleTtsClient.java     # Google Cloud TTS API client
 │   ├── ElevenLabsClient.java    # ElevenLabs TTS API client
-│   └── ChatterboxClient.java    # Self-hosted wrapper client (NeuTTS / Chatterbox / Pocket)
+│   └── ChatterboxClient.java    # Self-hosted wrapper client (Pocket TTS)
 └── util/
     └── PrefsHelper.java         # SharedPreferences — all three providers
 

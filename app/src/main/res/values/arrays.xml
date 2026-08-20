@@ -45,15 +45,11 @@
         <item>4.0</item>
     </string-array>
 
-    <!-- Self-hosted TTS engines (shared /voicenote surface, LAN host 192.168.0.85) -->
+    <!-- Self-hosted TTS engine — Pocket TTS only (NeuTTS/Chatterbox dropped: too slow on CPU) -->
     <string-array name="tts_engine_labels">
-        <item>NeuTTS Air (8006)</item>
-        <item>Chatterbox (8005)</item>
         <item>Pocket TTS (8007)</item>
     </string-array>
     <string-array name="tts_engine_values">
-        <item>192.168.0.85:8006</item>
-        <item>192.168.0.85:8005</item>
         <item>192.168.0.85:8007</item>
     </string-array>
 

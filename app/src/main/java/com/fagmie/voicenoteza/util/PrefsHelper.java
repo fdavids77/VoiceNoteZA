@@ -44,7 +44,7 @@ public class PrefsHelper {
     public void setElevenLabsVoiceName(String n) { prefs.edit().putString("elevenlabs_voice_name", n).apply(); }
 
     // Chatterbox
-    public String getChatterboxHost()    { return prefs.getString("chatterbox_host", "192.168.0.85:8006"); }
+    public String getChatterboxHost()    { return prefs.getString("chatterbox_host", "192.168.0.85:8007"); }
     public void setChatterboxHost(String h) { prefs.edit().putString("chatterbox_host", h.trim()).apply(); }
     public String getChatterboxVoice()   { return prefs.getString("chatterbox_voice", "myvoice"); }
     public void setChatterboxVoice(String v) { prefs.edit().putString("chatterbox_voice", v.trim()).apply(); }
